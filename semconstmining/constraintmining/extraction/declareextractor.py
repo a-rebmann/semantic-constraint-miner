@@ -6,7 +6,7 @@ from pm4py.objects.log.obj import EventLog, Trace, Event
 
 from semconstmining.constraintmining.conversion.petrinetanalysis import _is_relevant_label
 from semconstmining.constraintmining.model.parsed_label import get_dummy
-from semconstmining.declare.declare4py import Declare4Py
+from semconstmining.declare.declare import Declare4Py
 from semconstmining.parsing.resource_handler import ResourceHandler
 
 _logger = logging.getLogger(__name__)

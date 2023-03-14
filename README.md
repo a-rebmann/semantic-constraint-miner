@@ -34,6 +34,23 @@ SAP grants to Recipient a non-exclusive copyright license to the Model Collectio
 ```
 
 ## Setup
+### Before you start (Anyone except Macs with M1/M2 chip)
+
+```shell
+pip install pm4py
+```
+
+
+### Before you start (For Macs with M1/M2 chip only)
+You need to install the following packages:
+
+```shell
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh 
+pip install --no-deps pm4py
+```
+
+
+```shell    
 
 ### How to organize the data folder in the project you use this package in
 

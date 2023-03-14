@@ -1,10 +1,4 @@
-import gensim.downloader as api
 from enum import Enum
-from gensim.corpora import Dictionary
-from gensim.similarities import WordEmbeddingSimilarityIndex
-from gensim.similarities import SparseTermSimilarityMatrix
-from gensim.similarities import SoftCosineSimilarity
-from gensim.utils import simple_preprocess
 from nltk.corpus import wordnet
 from itertools import chain
 from semconstmining.constraintmining.bert_parser import label_utils
@@ -43,26 +37,8 @@ class SemanticSimilarityComputer(SimilarityComputer):
 
     def initialize_similarities(self, kb_verbs, log_verbs):
         print("computing semantic similarity matrix")
-        # Preprocess the documents, including the query string
-        kb_verbs = [simple_preprocess(verb) for verb in kb_verbs]
-        log_verbs = [simple_preprocess(verb) for verb in log_verbs]
 
-        # Load the model: this is a big file, can take a while to download and open
-        if not self.glove:
-            self.glove = api.load("glove-wiki-gigaword-50")
-        similarity_index = WordEmbeddingSimilarityIndex(self.glove)
-
-        # Create the term similarity matrix.
-        dictionary = Dictionary(kb_verbs + log_verbs)
-        similarity_matrix = SparseTermSimilarityMatrix(similarity_index, dictionary)
-
-        bow_corpus = [dictionary.doc2bow(document) for document in kb_verbs]
-        docsim_index = SoftCosineSimilarity(bow_corpus, similarity_matrix, num_best=20)
-        print("semantic sims computed")
-        self.verb_list = kb_verbs
-        self.dictionary = dictionary
-        self.docsim_index = docsim_index
-        return kb_verbs, dictionary, docsim_index
+        return kb_verbs, self.dictionary, self.docsim_index
 
     def set_loaded_similarities(self, kb_verbs, dictionary, docsim_index):
         self.verb_list = kb_verbs

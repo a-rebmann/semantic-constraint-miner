@@ -19,7 +19,7 @@ setup(
         'scipy',
         'matplotlib',
         'psutil',
-        'requests==2.26.0',
+        'requests==2.25.0',
         'transformers==4.9.2',
         'pytorch-transformers==1.2.0',
         'torch==1.9.0',

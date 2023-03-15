@@ -34,20 +34,24 @@ SAP grants to Recipient a non-exclusive copyright license to the Model Collectio
 ```
 
 ## Setup
-### Before you start (Anyone except Macs with M1/M2 chip)
+You have the following options to set up the project:
+
+### Anyone except Macs with M1/M2 chip
 
 ```shell
-pip install pm4py
+pip install .
 ```
 
 
-### Before you start (For Macs with M1/M2 chip only)
-You need to install the following packages:
+### Anyone including Macs with M1/M2 chip
 
+We provide a [conda](https://docs.conda.io/projects/conda/en/latest/user-guide/index.html) environment.yml file that can be used to create a new environment and install the required dependencies.
+
+You can use the following conda command to create the environment:
 ```shell
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh 
-pip install --no-deps pm4py
+conda env create -f environment.yml  
 ```
+
 
 
 ```shell    
@@ -63,6 +67,7 @@ pip install --no-deps pm4py
 You need to download the [dataset](insert link) and place it into the folder `./data/raw` such that the models are in `./data/raw/sap_sam_2022/models`.
 
 After installing the package you need to download the Spacy language model for English and nltk stopwords
+
 ```shell
 python -m spacy download en_core_web_sm
 ```

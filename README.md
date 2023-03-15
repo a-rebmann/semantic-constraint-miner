@@ -53,9 +53,6 @@ conda env create -f environment.yml
 ```
 
 
-
-```shell    
-
 ### How to organize the data folder in the project you use this package in
 
     ├── data
@@ -71,6 +68,7 @@ After installing the package you need to download the Spacy language model for E
 ```shell
 python -m spacy download en_core_web_sm
 ```
+
 ```shell
 python -m nltk.downloader stopwords
 ```

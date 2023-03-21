@@ -73,7 +73,8 @@ python -m spacy download en_core_web_sm
 python -m nltk.downloader stopwords
 ```
 
-
+Lastly, we use a custom Tagger to extract objects, actions, and various other semantic information from labels.
+You need to download the four files from [here](https://gitlab.uni-mannheim.de/processanalytics/semantic-event-log-annotation/-/tree/main/.model/main) and put them into <code>data/bert/</code>
     
     
     

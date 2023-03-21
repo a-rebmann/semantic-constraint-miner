@@ -39,6 +39,6 @@ setup(
         'sentence_transformers==2.2.0',
         'mlxtend==0.21.0',
         'func-timeout==4.3.5',
-        'pm4py==2.5.0',
+        'pm4py==2.5.1',
     ]
 )

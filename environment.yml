@@ -30,7 +30,7 @@ dependencies:
       - pytorch-transformers==1.2.0
       - torch==1.9.0
       - six==1.16.0
-      - pm4py==2.5.0
+      - pm4py==2.5.1
       - metric-temporal-logic==0.4.0
       - sentence_transformers==2.2.0
       - mlxtend==0.21.0

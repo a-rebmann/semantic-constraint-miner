@@ -104,6 +104,7 @@ class Config:
         self.LEFT_OPERAND = "left_op"
         self.RIGHT_OPERAND = "right_op"
         self.RECORD_ID = "obs_id"
+        self.FITTED_RECORD_ID = "fitted_obs_id"
         self.LEVEL = "Level"
         self.OPERATOR_TYPE = "op_type"
         self.MODEL_NAME = "model_name"

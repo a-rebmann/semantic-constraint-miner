@@ -61,7 +61,7 @@ class ConstraintRecommender:
         if len(self.log_info.objects) == 0:
             raise RuntimeError("No objects available")
         if self.config.OBJECT_BASED_SIM not in self.context_sim_computer.constraints.columns:
-            self.context_sim_computer.compute_object_based_contextual_similarity()
+            self.context_sim_computer.compute_object_based_contextual_dissimilarity()
         return self.context_sim_computer.constraints[
             self.context_sim_computer.constraints[self.config.OBJECT_BASED_SIM] <= sim_thresh]
 
@@ -69,7 +69,7 @@ class ConstraintRecommender:
         if len(self.log_info.names) == 0:
             raise RuntimeError("No names available")
         if self.config.NAME_BASED_SIM not in self.context_sim_computer.constraints.columns:
-            self.context_sim_computer.compute_name_based_contextual_similarity()
+            self.context_sim_computer.compute_name_based_contextual_dissimilarity()
         return self.context_sim_computer.constraints[
             self.context_sim_computer.constraints[self.config.NAME_BASED_SIM] <= sim_thresh]
 
@@ -77,7 +77,7 @@ class ConstraintRecommender:
         if len(self.log_info.labels) == 0:
             raise RuntimeError("No labels available")
         if self.config.LABEL_BASED_SIM not in self.context_sim_computer.constraints.columns:
-            self.context_sim_computer.compute_label_based_contextual_similarity()
+            self.context_sim_computer.compute_label_based_contextual_dissimilarity()
         return self.context_sim_computer.constraints[
             self.context_sim_computer.constraints[self.config.LABEL_BASED_SIM] <= sim_thresh]
 

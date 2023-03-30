@@ -60,11 +60,11 @@ class ContextualSimilarityComputer:
             self._sent_model = SentenceTransformer(self.config.SENTENCE_TRANSFORMER)
         return self._sent_model
 
-    def compute_label_based_contextual_similarity(self, mode=mean):
+    def compute_label_based_contextual_dissimilarity(self, mode=mean):
         _logger.info("Computing label-based contextual similarity")
         if self.config.LABEL_BASED_SIM in self.constraints.columns:
             return
-        self.constraints[self.config.LABEL_BASED_SIM] = 1.0
+        self.constraints[self.config.LABEL_BASED_SIM] = 0.0
         if self.resource_handler is None:
             _logger.error("Cannot access individual model data without a resource_handler being set! Set it to use "
                           "this method")
@@ -75,30 +75,30 @@ class ContextualSimilarityComputer:
                 continue
             unique_combinations = [(a, b) for idx, a in enumerate(concat_labels) for b in concat_labels[idx + 1:]]
             sims = self.get_sims(unique_combinations)
-            self.constraints.at[idx, self.config.LABEL_BASED_SIM] = mode(sims)
+            self.constraints.at[idx, self.config.LABEL_BASED_SIM] = 1 - mode(sims)
             # Persist known similarities to avoid later reprocessing
         write_pickle(self.known_sims, self.knowm_sim_ser)
 
-    def compute_name_based_contextual_similarity(self, mode=mean):
+    def compute_name_based_contextual_dissimilarity(self, mode=mean):
         _logger.info("Computing name-based contextual similarity")
         if self.config.NAME_BASED_SIM in self.constraints.columns:
             return
-        self.constraints[self.config.NAME_BASED_SIM] = 1.0
+        self.constraints[self.config.NAME_BASED_SIM] = 0.0
         for idx, row in self.constraints.iterrows():
             names = self._prepare_names(row)
             if len(names) < 2:
                 continue
             unique_combinations = [(a, b) for idx, a in enumerate(names) for b in names[idx + 1:]]
             sims = self.get_sims(unique_combinations)
-            self.constraints.at[idx, self.config.NAME_BASED_SIM] = mode(sims)
+            self.constraints.at[idx, self.config.NAME_BASED_SIM] = 1 - mode(sims)
             # Persist known similarities to avoid later reprocessing
         write_pickle(self.known_sims, self.knowm_sim_ser)
 
-    def compute_object_based_contextual_similarity(self, mode=mean):
+    def compute_object_based_contextual_dissimilarity(self, mode=mean):
         _logger.info("Computing object-based contextual similarity")
         if self.config.OBJECT_BASED_SIM in self.constraints.columns:
             return
-        self.constraints[self.config.OBJECT_BASED_SIM] = 1.0
+        self.constraints[self.config.OBJECT_BASED_SIM] = 0.0
         for const, group in self.constraints[(self.constraints[self.config.LEVEL] == self.config.OBJECT) &
                                              (self.constraints[self.config.OPERATOR_TYPE] == self.config.BINARY)].groupby(self.config.CONSTRAINT_STR):
             unique_bos = self._prepare_objs(group)
@@ -108,7 +108,7 @@ class ContextualSimilarityComputer:
             sim_scores = self.get_sims(unique_combinations)
             agg_score = mode(sim_scores)
             for i, row in group.iterrows():
-                self.constraints.at[i, self.config.OBJECT_BASED_SIM] = agg_score
+                self.constraints.at[i, self.config.OBJECT_BASED_SIM] = 1 - agg_score
 
     def compute_label_based_contextual_similarity_external(self, res_const, external, mode=mean):
         _logger.info("Computing label-based contextual similarity with external labels")

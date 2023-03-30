@@ -184,9 +184,9 @@ def get_context_sim_computer(config, constraints, resource_handler, min_support=
     resource_handler
     """
     contextual_similarity_computer = ContextualSimilarityComputer(config, constraints, resource_handler)
-    contextual_similarity_computer.compute_object_based_contextual_similarity()
-    contextual_similarity_computer.compute_label_based_contextual_similarity()
-    contextual_similarity_computer.compute_name_based_contextual_similarity()
+    contextual_similarity_computer.compute_object_based_contextual_dissimilarity()
+    contextual_similarity_computer.compute_label_based_contextual_dissimilarity()
+    contextual_similarity_computer.compute_name_based_contextual_dissimilarity()
     store_preprocessed(config, contextual_similarity_computer.resource_handler, contextual_similarity_computer.constraints,
                        min_support, dict_filter, mark_redundant, with_nat_lang)
     return contextual_similarity_computer

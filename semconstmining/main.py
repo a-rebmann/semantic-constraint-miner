@@ -114,13 +114,13 @@ def get_all_constraints(config, resource_handler, min_support=2, dict_filter=Fal
         else:
             constraints = eh.get_all_observations()
         if dict_filter:
-            dict_fil = DictionaryFilter(constraints)
+            dict_fil = DictionaryFilter(config, constraints)
             dict_fil.mark_natural_language_objects()
             constraints = dict_fil.filter_with_proprietary_dict(prop_dict={})
         if mark_redundant:
             # We analyze the extracted constraints with respect to their hierarchy,
             # we then keep stronger constraints with the same support as weaker ones, which we remove
-            subsumption_analyzer = SubsumptionAnalyzer(constraints)
+            subsumption_analyzer = SubsumptionAnalyzer(config, constraints)
             subsumption_analyzer.check_refinement()
             subsumption_analyzer.check_subsumption()
             subsumption_analyzer.check_equal()

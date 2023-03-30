@@ -22,7 +22,7 @@ setup(
         'requests==2.28.1',
         'transformers==4.9.2',
         'pytorch-transformers==1.2.0',
-        'torch==1.9.0',
+        'torch==1.10.0',
         'six==1.16.0',
         'tqdm==4.64.1',
         'joblib==1.2.0',

@@ -22,8 +22,6 @@ def _get_json_from_row(row_tuple):
     return json.loads(row_tuple.model_json)
 
 
-
-
 def process_pools_and_lanes(shapes, pools, lanes):
     follows = {}
     labels = {}
@@ -89,24 +87,23 @@ def _create_mp_declare_const_with_decision_condition(left, right):
 class ModelExtractor:
 
     def __init__(self, config, resource_handler: ResourceHandler, types_to_ignore):
-        self.config=config
+        self.config = config
         self.resource_handler = resource_handler
         self.types_to_ignore = [] if not types_to_ignore else types_to_ignore
 
     def _traverse_and_extract_decisions(self, follows, labels, tasks):
         choice_sets = {}
-        irrelevant_shapes = ()  # '("SequenceFlow", "MessageFlow", "DataObject", "Pool", "Lane", "TextAnnotation", "Association_Undirected", "Association_Bidirectional", "Association_Unidirectional", "Group", "CollapsedPool", "ITSystem", "DataStore")
-
+        irrelevant_shapes = ()
         for s in follows.keys():
             # Only check relevant shapes
-            if bpmn_analyzer._is_relevant(s, labels, irrelevant_shapes):
+            if bpmn_analyzer.is_relevant(s, labels, irrelevant_shapes):
                 # Get postset of considered element "s"
                 postset = set(follows[s])
                 # ++++++++++++++++++++++++++++++
                 # Source = choice gateway
                 # ++++++++++++++++++++++++++++++
-                if bpmn_analyzer._get_type(s, labels, irrelevant_shapes) == "Gateway":
-                    if bpmn_analyzer._is_choice(s, labels):
+                if bpmn_analyzer.get_type(s, labels, irrelevant_shapes) == "Gateway":
+                    if bpmn_analyzer.is_choice(s, labels):
                         choice_sets[s] = {"name": labels[s], "choices": set()}
                         for elem in postset:
                             seq = labels[elem]
@@ -161,6 +158,8 @@ class ModelExtractor:
         observations.extend(self._get_observations_for_resource_perspective(json_str, types_to_ignore))
         # The data perspective
         observations.extend(self._get_observations_for_decision_perspective(json_str, types_to_ignore))
+        # The object perspective
+        #observations.extend(self._get_observations_for_object_perspective(json_str, types_to_ignore))
         return (
             pd.DataFrame.from_records(self.get_observations_flat(observations)).assign(model_id=row_tuple.model_id).assign(
                 model_name=row_tuple.name)
@@ -236,3 +235,5 @@ class ModelExtractor:
                 rec[self.config.LEFT_OPERAND] = op_l if op_l not in self.config.TERMS_FOR_MISSING else ""
                 rec[self.config.RIGHT_OPERAND] = op_r if op_r not in self.config.TERMS_FOR_MISSING else ""
         return res
+
+

@@ -62,7 +62,7 @@ def get_log_info(config: Config):
 
 def store_preprocessed(config, resource_handler, constraints, min_support, dict_filter, mark_redundant, with_nat_lang):
     constraints.to_pickle(
-        config.DATA_INTERIM / (resource_handler.model_collection_id + "_" + "supp=" + str(min_support) +
+        config.DATA_INTERIM / (config.MODEL_COLLECTION + "_" + "supp=" + str(min_support) +
                                "_" + "dict=" + str(dict_filter) +
                                "_" + "redundant=" + str(mark_redundant) +
                                "_" + "nat_lang=" + str(with_nat_lang) +
@@ -71,7 +71,7 @@ def store_preprocessed(config, resource_handler, constraints, min_support, dict_
 
 def load_preprocessed(config, resource_handler, min_support, dict_filter, mark_redundant, with_nat_lang):
     return pd.read_pickle(
-        config.DATA_INTERIM / (resource_handler.model_collection_id + "_" + "supp=" + str(min_support) +
+        config.DATA_INTERIM / (config.MODEL_COLLECTION + "_" + "supp=" + str(min_support) +
                                "_" + "dict=" + str(dict_filter) +
                                "_" + "redundant=" + str(mark_redundant) +
                                "_" + "nat_lang=" + str(with_nat_lang) +
@@ -102,7 +102,7 @@ def get_all_constraints(config, resource_handler, min_support=2, dict_filter=Fal
 
     eh = ExtractionHandler(config, resource_handler, types_to_ignore=CONSTRAINT_TYPES_TO_IGNORE)
 
-    if exists(config.DATA_INTERIM / (resource_handler.model_collection_id + "_" + "supp=" + str(min_support) +
+    if exists(config.DATA_INTERIM / (config.MODEL_COLLECTION + "_" + "supp=" + str(min_support) +
                                      "_" + "dict=" + str(dict_filter) +
                                      "_" + "redundant=" + str(mark_redundant) +
                                      "_" + "nat_lang=" + str(with_nat_lang) +
@@ -144,22 +144,22 @@ def check_constraints(config, log_name, constraints=None):
     return declare_checker.check_constraints()
 
 
-def get_resource_handler(config, collection_id="SAP-SAM"):
+def get_resource_handler(config):
     """
     # Preparing the resources for constraint mining from the given model collection
     # Either the models from the SAP-SAM data set are used (default) or the models from a Signavio workspace
     (configure the workspace ID in the log.auth script)
     :return:
     """
-    resource_handler = ResourceHandler(config, collection_id)
+    resource_handler = ResourceHandler(config)
     resource_handler.load_bpmn_model_elements()
+    resource_handler.load_dictionary_if_exists()
     resource_handler.determine_model_languages()
     if ONLY_ENGLISH:
         resource_handler.filter_only_english()
     resource_handler.load_bpmn_models()
     resource_handler.get_logs_for_sound_models()
     resource_handler.tag_task_labels()
-    resource_handler.load_dictionary_if_exists()
     return resource_handler
 
 
@@ -209,9 +209,9 @@ def recommend_constraints_for_log(config, log_name, contextual_similarity_comput
     return fitted_constraints
 
 
-def run_full_extraction_pipeline(config, process, collection_id="SAP-SAM"):
+def run_full_extraction_pipeline(config: Config, process: str):
     lh = LogHandler(config)
-    resource_handler = get_resource_handler(config, collection_id=collection_id)
+    resource_handler = get_resource_handler(config)
     consts = get_all_constraints(config, resource_handler)
     contextual_similarity_computer = get_context_sim_computer(config, consts, resource_handler)
     pd_log = lh.read_log(config.DATA_LOGS, process)
@@ -225,13 +225,13 @@ def run_full_extraction_pipeline(config, process, collection_id="SAP-SAM"):
     recommended_constraints = recommended_constraints[recommended_constraints[config.LEVEL].str.contains(config.OBJECT)]
     # TODO here we should give the user an option to choose which constraints to add
     #  and which to ignore
-    check_constraints(process, recommended_constraints)
+    check_constraints(config, process, recommended_constraints)
 
 
 CURRENT_LOG_WS = "defaultview-2"
 CURRENT_LOG_FILE = "semconsttest.xes"
 
 if __name__ == "__main__":
-    conf = Config(Path(__file__).parents[2].resolve())
-    run_full_extraction_pipeline(config=conf, process=CURRENT_LOG_WS, collection_id="OPAL")
+    conf = Config(Path(__file__).parents[2].resolve(), "opal")
+    run_full_extraction_pipeline(config=conf, process=CURRENT_LOG_WS)
     sys.exit(0)

@@ -38,12 +38,14 @@ class DeclareExtractor:
                 self.config.LEVEL: self.config.OBJECT,
                 self.config.OBJECT: bo,
                 self.config.CONSTRAINT_STR: const,
-                self.config.OPERATOR_TYPE: self.config.BINARY if any(temp in const for temp in self.config.BINARY_TEMPLATES) else self.config.UNARY
+                self.config.OPERATOR_TYPE: self.config.BINARY if any(
+                    temp in const for temp in self.config.BINARY_TEMPLATES) else self.config.UNARY
                 } for bo, consts in res.items() for const in consts]
         res = self.add_operands(res)
         for rec in res:
             if rec[self.config.OPERATOR_TYPE] == self.config.UNARY:
-                rec[self.config.LEFT_OPERAND] = rec[self.config.CONSTRAINT_STR].split("[")[1].replace("]", "").replace("|", "").strip()
+                rec[self.config.LEFT_OPERAND] = rec[self.config.CONSTRAINT_STR].split("[")[1].replace("]", "").replace(
+                    "|", "").strip()
             if rec[self.config.OPERATOR_TYPE] == self.config.BINARY:
                 ops = rec[self.config.CONSTRAINT_STR].split("[")[1].replace("]", "").replace("|", "").split(",")
                 rec[self.config.LEFT_OPERAND] = ops[0].strip()
@@ -55,11 +57,13 @@ class DeclareExtractor:
                 self.config.LEVEL: self.config.MULTI_OBJECT,
                 self.config.OBJECT: "",
                 self.config.CONSTRAINT_STR: const,
-                self.config.OPERATOR_TYPE: self.config.BINARY if any(temp in const for temp in self.config.BINARY_TEMPLATES) else self.config.UNARY
+                self.config.OPERATOR_TYPE: self.config.BINARY if any(
+                    temp in const for temp in self.config.BINARY_TEMPLATES) else self.config.UNARY
                 } for const in res]
         for rec in res:
             if rec[self.config.OPERATOR_TYPE] == self.config.UNARY:
-                rec[self.config.LEFT_OPERAND] = rec[self.config.CONSTRAINT_STR].split("[")[1].replace("]", "").replace("|", "").strip()
+                rec[self.config.LEFT_OPERAND] = rec[self.config.CONSTRAINT_STR].split("[")[1].replace("]", "").replace(
+                    "|", "").strip()
             if rec[self.config.OPERATOR_TYPE] == self.config.BINARY:
                 ops = rec[self.config.CONSTRAINT_STR].split("[")[1].replace("]", "").replace("|", "").split(",")
                 rec[self.config.LEFT_OPERAND] = ops[0].strip()
@@ -72,6 +76,10 @@ class DeclareExtractor:
         :return: a pandas dataframe with extracted DECLARE constraints
         """
         _logger.info("Extracting DECLARE constraints from played-out logs")
+        # Discover regular declare constraints
+        dfs_reg = [self.discover_declare_constraints(t) for t in
+                   self.resource_handler.bpmn_logs.reset_index().itertuples()]
+
         # Discover action based constraints per object
         dfs_obj = [self.discover_object_based_declare_constraints(t) for t in
                    self.resource_handler.bpmn_logs.reset_index().itertuples()]
@@ -80,7 +88,7 @@ class DeclareExtractor:
                          self.resource_handler.bpmn_logs.reset_index().itertuples()]
 
         # Combine all constraints that were extracted into a common dataframe
-        dfs = [df for df in dfs_obj + dfs_multi_obj if df is not None]
+        dfs = [df for df in dfs_reg + dfs_obj + dfs_multi_obj if df is not None]
         new_df = pd.concat(dfs).astype({self.config.LEVEL: "category"})
         return new_df
 
@@ -109,7 +117,8 @@ class DeclareExtractor:
         parsed_tasks = self.get_parsed_tasks(row_tuple.log, resource_handler=self.resource_handler)
         filtered_traces = self.get_filtered_traces(row_tuple.log, parsed_tasks=parsed_tasks)
         res = {}
-        bos = set([x.main_object for trace in filtered_traces for x in trace if x.main_object not in self.config.TERMS_FOR_MISSING])
+        bos = set([x.main_object for trace in filtered_traces for x in trace if
+                   x.main_object not in self.config.TERMS_FOR_MISSING])
         # _logger.info(bos)
         for bo in bos:
             d4py = Declare4Py()
@@ -137,7 +146,10 @@ class DeclareExtractor:
         res = {const for const, checker_results in res.items() if "[]" not in const
                and "[none]" not in const
                and ''.join([i for i in const.split("[")[0] if not i.isdigit()]) not in self.types_to_ignore}
-        return res
+        return (
+            pd.DataFrame.from_records(self.get_constraints_flat(res)).assign(model_id=row_tuple.model_id).assign(
+                model_name=row_tuple.name)
+        )
 
     def has_loop(self, trace):
         trace_labels = [x[self.config.XES_NAME] for x in trace]
@@ -152,7 +164,8 @@ class DeclareExtractor:
     def get_filtered_traces(self, log, parsed_tasks=None, with_loops=False):
         if parsed_tasks is not None:
             return [
-                [parsed_tasks[e[self.config.XES_NAME]] if e[self.config.XES_NAME] in parsed_tasks else get_dummy(self.config, e[self.config.XES_NAME], self.config.EN) for i, e in
+                [parsed_tasks[e[self.config.XES_NAME]] if e[self.config.XES_NAME] in parsed_tasks else get_dummy(
+                    self.config, e[self.config.XES_NAME], self.config.EN) for i, e in
                  enumerate(trace)] for trace in log if not with_loops and not self.has_loop(trace)]
         else:
             return [[e[self.config.XES_NAME] for i, e in enumerate(trace)] for trace in log if
@@ -208,3 +221,22 @@ class DeclareExtractor:
                 last = parsed.main_object
             projection.append(tmp_trace)
         return projection
+
+    def get_constraints_flat(self, res):
+        res = [{self.config.RECORD_ID: str(uuid.uuid4()),
+                self.config.LEVEL: self.config.DECLARE_CONST,
+                self.config.OBJECT: "",
+                self.config.CONSTRAINT_STR: const,
+                self.config.OPERATOR_TYPE: self.config.BINARY if any(
+                    temp in const for temp in self.config.BINARY_TEMPLATES) else self.config.UNARY
+                } for const in res]
+        for rec in res:
+            if rec[self.config.OPERATOR_TYPE] == self.config.UNARY:
+                rec[self.config.LEFT_OPERAND] = rec[self.config.CONSTRAINT_STR].split("[")[1].replace("]", "").replace(
+                    "|", "").strip()
+            if rec[self.config.OPERATOR_TYPE] == self.config.BINARY:
+                ops = rec[self.config.CONSTRAINT_STR].split("[")[1].replace("]", "").replace("|", "").split(",")
+                rec[self.config.LEFT_OPERAND] = ops[0].strip()
+                rec[self.config.RIGHT_OPERAND] = ops[1].strip()
+        return res
+

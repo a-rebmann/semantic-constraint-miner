@@ -9,6 +9,7 @@ from semconstmining.constraintmining.bert_parser import BertTagger, label_utils
 from semconstmining.constraintmining.model.parsed_label import ParsedLabel, get_dummy
 from semconstmining.parsing import parser
 from semconstmining.parsing import detector
+from semconstmining.parsing.model_to_log import Model2LogConverter
 
 warnings.simplefilter('ignore')
 warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -18,19 +19,17 @@ _logger = logging.getLogger(__name__)
 
 class ResourceHandler:
 
-    def __init__(self, config, model_collection_id):
+    def __init__(self, config):
         self.config = config
-        self.model_collection_id = model_collection_id
         self.data_parser = parser.BpmnModelParser(config)
         self.bert_parser = BertTagger(config)
-        self.elements_ser_file = config.DATA_INTERIM / (self.model_collection_id + "_" + config.ELEMENTS_SER_FILE)
-        self.models_ser_file = config.DATA_INTERIM / (self.model_collection_id + "_" + config.MODELS_SER_FILE)
-        self.languages_ser_file = config.DATA_INTERIM / (self.model_collection_id + "_" + config.LANG_SER_FILE)
-        self.logs_ser_file = config.DATA_INTERIM / (self.model_collection_id + "_" + config.LOGS_SER_FILE)
-        self.tagged_ser_file = config.DATA_INTERIM / (self.model_collection_id + "_" + config.TAGGED_SER_FILE)
-        # TODO this is not generic
-        self.dictionary_ser_file = config.DATA_DATASET_DICT if self.model_collection_id == "SAP-SAM" \
-            else config.DATA_OPAL_DATASET_DICT if self.model_collection_id == "OPAL" else None
+        self.model_to_log_converter = Model2LogConverter(config)
+        self.elements_ser_file = config.DATA_INTERIM / (self.config.MODEL_COLLECTION + "_" + config.ELEMENTS_SER_FILE)
+        self.models_ser_file = config.DATA_INTERIM / (self.config.MODEL_COLLECTION + "_" + config.MODELS_SER_FILE)
+        self.languages_ser_file = config.DATA_INTERIM / (self.config.MODEL_COLLECTION + "_" + config.LANG_SER_FILE)
+        self.logs_ser_file = config.DATA_INTERIM / (self.config.MODEL_COLLECTION + "_" + config.LOGS_SER_FILE)
+        self.tagged_ser_file = config.DATA_INTERIM / (self.config.MODEL_COLLECTION + "_" + config.TAGGED_SER_FILE)
+        self.dictionary_ser_file = config.DATA_DATASET_DICT
         self.bpmn_model_elements = None
         self.bpmn_models = None
         self.model_languages = None
@@ -70,10 +69,8 @@ class ResourceHandler:
             self.bpmn_model_elements = pd.read_pickle(self.config.DATA_INTERIM / self.elements_ser_file)
         else:
             self.bpmn_model_elements = self.data_parser.parse_model_elements()
-            self.bpmn_model_elements[self.config.ORIGINAL_LABEL] = self.bpmn_model_elements[self.config.LABEL]
-            self.bpmn_model_elements[self.config.LABEL] = self.bpmn_model_elements[self.config.LABEL].apply(
+            self.bpmn_model_elements[self.config.CLEANED_LABEL] = self.bpmn_model_elements[self.config.LABEL].apply(
                 lambda x: label_utils.sanitize_label(str(x or '')))
-            self.bpmn_model_elements[self.config.CLEANED_LABEL] = self.bpmn_model_elements[self.config.LABEL]
             self.bpmn_model_elements.to_pickle(self.config.DATA_INTERIM / self.elements_ser_file)
 
     def load_bpmn_models(self):
@@ -82,7 +79,6 @@ class ResourceHandler:
             self.bpmn_models = pd.read_pickle(self.config.DATA_INTERIM / self.models_ser_file)
         else:
             self.bpmn_models = self.data_parser.parse_models(filter_df=self.bpmn_model_elements)
-            self.bpmn_models = self.bpmn_models.loc[self.bpmn_models.index.isin(self.bpmn_model_elements.index.values)]
             self.bpmn_models[self.config.NAME] = self.bpmn_models[self.config.NAME].astype(str)
             _logger.info("Remove example models from " + str(len(self.bpmn_models)))
             pattern = '|'.join(self.config.EXAMPLE_MODEL_NAMES)
@@ -96,22 +92,16 @@ class ResourceHandler:
         if exists(self.config.DATA_INTERIM / self.languages_ser_file):
             _logger.info("Loading detected languages.")
             self.model_languages = pd.read_pickle(self.config.DATA_INTERIM / self.languages_ser_file)
-            if self.config.LABEL in self.model_languages.columns:
-                self.model_languages.rename(columns={self.config.LABEL: self.config.LABEL_LIST}, inplace=True)
             if self.config.DETECTED_NAT_LANG not in self.bpmn_model_elements.columns:
-                self.bpmn_model_elements = pd.merge(self.bpmn_model_elements, self.model_languages, how='left',
-                                                    on=self.config.MODEL_ID)
+                self.bpmn_model_elements = pd.merge(self.bpmn_model_elements, self.model_languages, how="left", on=self.config.MODEL_ID)
                 self.bpmn_model_elements.to_pickle(self.config.DATA_INTERIM / self.languages_ser_file)
         else:
             _logger.info("Detect languages.")
             ld = detector.ModelLanguageDetector(self.config, 0.8)
             self.model_languages = ld.get_detected_natural_language_from_bpmn_model(self.bpmn_model_elements)
-            if self.config.LABEL in self.model_languages.columns:
-                self.model_languages.rename(columns={self.config.LABEL: self.config.LABEL_LIST}, inplace=True)
             self.model_languages.to_pickle(self.config.DATA_INTERIM / self.languages_ser_file)
             if self.config.DETECTED_NAT_LANG not in self.bpmn_model_elements.columns:
-                self.bpmn_model_elements = pd.merge(self.bpmn_model_elements, self.model_languages, how='left',
-                                                    on=self.config.MODEL_ID)
+                self.bpmn_model_elements = pd.merge(self.bpmn_model_elements, self.model_languages, how="left", on=self.config.MODEL_ID)
                 self.bpmn_model_elements.to_pickle(self.config.DATA_INTERIM / self.elements_ser_file)
 
     def get_logs_for_sound_models(self):
@@ -119,8 +109,8 @@ class ResourceHandler:
         if exists(self.config.DATA_INTERIM / self.logs_ser_file):
             self.bpmn_logs = pd.read_pickle(self.config.DATA_INTERIM / self.logs_ser_file)
         else:
-            df_petri = self.data_parser.convert_models_to_pn_df(self.bpmn_models)
-            self.bpmn_logs = self.data_parser.generate_logs_lambda(df_petri)
+            df_petri = self.model_to_log_converter.convert_models_to_pn_df(self.bpmn_models)
+            self.bpmn_logs = self.model_to_log_converter.generate_logs_lambda(df_petri, self.bpmn_model_elements)
             self.bpmn_logs.to_pickle(self.config.DATA_INTERIM / self.logs_ser_file)
             for (dir_path, dir_names, filenames) in os.walk(self.config.PETRI_LOGS_DIR):
                 for filename in filenames:

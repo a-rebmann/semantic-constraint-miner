@@ -9,22 +9,15 @@ class JsonToPetriNetConverter:
     def __init__(self):
         self.key_index = 0
 
-    def convert_from_parsed(self, follows, labels, tasks):
-        return self._conv_to_pn(follows, labels, tasks)
+    def convert_from_parsed(self, follows, labels):
+        return self._conv_to_pn(follows, labels)
 
-    def convert_from_string(self, model_string):
-        follows, labels, tasks = bpmn_analyzer.fromJSON(model_string)
-        return self._conv_to_pn(follows, labels, tasks)
-
-    def convert_to_petri_net(self, file):
-        follows, labels, tasks = bpmn_analyzer.loadJSON(file)
-        return self._conv_to_pn(follows, labels, tasks)
-
-    def _conv_to_pn(self, follows, labels, tasks):
+    def _conv_to_pn(self, follows, labels):
         net = PetriNet("net")
         sources = set()
         sinks = set()
         elements = {}
+        idx_to_elm = {}
         gateways_input = {}
         gateways_output = {}
         implicit_joins = set()
@@ -32,30 +25,30 @@ class JsonToPetriNetConverter:
         irrelevant_shapes = (
         "SequenceFlow", "MessageFlow", "DataObject", "Pool", "Lane", "TextAnnotation", "Association_Undirected",
         "Association_Bidirectional", "Association_Unidirectional", "Group", "CollapsedPool", "ITSystem", "DataStore")
-
         for s in follows.keys():
 
             # Handle events
-            if bpmn_analyzer._get_type(s, labels, irrelevant_shapes) == "Event":
+            if bpmn_analyzer.get_type(s, labels, irrelevant_shapes) == "Event":
 
                 # Special case: attached events
                 if labels[s].startswith("Intermediate") & len(
-                        [x for x in bpmn_analyzer._get_preset(labels, follows, s) if
-                         bpmn_analyzer._is_relevant(x, labels, irrelevant_shapes)]) > 0:
-                    origin = bpmn_analyzer._get_preset(labels, follows, s).pop()
+                        [x for x in bpmn_analyzer.get_preset(labels, follows, s) if
+                         bpmn_analyzer.is_relevant(x, labels, irrelevant_shapes)]) > 0:
+                    origin = bpmn_analyzer.get_preset(labels, follows, s).pop()
                     if s in follows[origin]:
                         labels[s] = "AttachedEvent"
                 p = PetriNet.Place(s)
                 net.places.add(p)
                 elements[s] = p
-                if len(bpmn_analyzer._get_postset(labels, follows, s)) == 0:
+                if len(bpmn_analyzer.get_postset(labels, follows, s)) == 0:
                     sinks.add(s)
-                if len(bpmn_analyzer._get_preset(labels, follows, s)) == 0:
+                if len(bpmn_analyzer.get_preset(labels, follows, s)) == 0:
                     sources.add(s)
 
             # Handle gateways
-            elif bpmn_analyzer._get_type(s, labels, irrelevant_shapes) == "Gateway":
-                t = PetriNet.Transition(s, labels[s])
+            elif bpmn_analyzer.get_type(s, labels, irrelevant_shapes) == "Gateway":
+                t = PetriNet.Transition(s, s) # labels[s]) TODO
+                idx_to_elm[t.name] = s
                 net.transitions.add(t)
                 elements[s] = t
 
@@ -63,13 +56,14 @@ class JsonToPetriNetConverter:
             elif not labels[s].startswith(irrelevant_shapes):
                 if labels[s].startswith("CollapsedSubprocess"):
                     labels[s] = labels[s][21:-1]
-                t = PetriNet.Transition(s, labels[s])
+                t = PetriNet.Transition(s, s) # labels[s]) TODO
+                idx_to_elm[t.name] = s
                 net.transitions.add(t)
                 elements[s] = t
 
                 # Implicit joins
-                if len([x for x in bpmn_analyzer._get_preset(labels, follows, s) if
-                        bpmn_analyzer._is_relevant(x, labels, irrelevant_shapes)]) > 1:
+                if len([x for x in bpmn_analyzer.get_preset(labels, follows, s) if
+                        bpmn_analyzer.is_relevant(x, labels, irrelevant_shapes)]) > 1:
                     implicit_joins.add(s)
 
                 # Note that implicit splits requires no further handling since
@@ -80,21 +74,21 @@ class JsonToPetriNetConverter:
             # print(f"FlOW: {labels[s]} ({s}) {[labels[x] for x in follows[s]]} ({follows[s]})")
 
             # Only check relevant shapes
-            if bpmn_analyzer._is_relevant(s, labels, irrelevant_shapes):
+            if bpmn_analyzer.is_relevant(s, labels, irrelevant_shapes):
 
                 # Get postset of considered element "s"
-                postset = [x for x in bpmn_analyzer._get_postset(labels, follows, s) if
-                           bpmn_analyzer._is_relevant(x, labels, irrelevant_shapes)]
+                postset = [x for x in bpmn_analyzer.get_postset(labels, follows, s) if
+                           bpmn_analyzer.is_relevant(x, labels, irrelevant_shapes)]
 
                 # ++++++++++++++++++++++++++++++
                 # Source = event
                 # ++++++++++++++++++++++++++++++
 
-                if bpmn_analyzer._get_type(s, labels, irrelevant_shapes) == "Event":
+                if bpmn_analyzer.get_type(s, labels, irrelevant_shapes) == "Event":
                     for elem in postset:
 
                         # Source = event & target = event
-                        if bpmn_analyzer._get_type(elem, labels, irrelevant_shapes) == "Event":
+                        if bpmn_analyzer.get_type(elem, labels, irrelevant_shapes) == "Event":
                             t = self._get_new_transition(net, elements, labels)
                             utils.add_arc_from_to(elements[s], t, net)
                             utils.add_arc_from_to(t, elements[elem], net)
@@ -106,11 +100,11 @@ class JsonToPetriNetConverter:
                 # ++++++++++++++++++++++++++++++
                 # Source = task
                 # ++++++++++++++++++++++++++++++
-                if bpmn_analyzer._get_type(s, labels, irrelevant_shapes) == "Task":
+                if bpmn_analyzer.get_type(s, labels, irrelevant_shapes) == "Task":
                     for elem in postset:
 
                         # Source = task & target = gateway
-                        if bpmn_analyzer._get_type(elem, labels, irrelevant_shapes) == "Gateway":
+                        if bpmn_analyzer.get_type(elem, labels, irrelevant_shapes) == "Gateway":
 
                             # Source = task & target = parallel gateway
                             if labels[elem].startswith("Parallel"):
@@ -119,7 +113,7 @@ class JsonToPetriNetConverter:
                                 utils.add_arc_from_to(p, elements[elem], net)
 
                             # Source = task & target = choice gateway (requires creating a shared place)
-                            if bpmn_analyzer._is_choice(elem, labels):
+                            if bpmn_analyzer.is_choice(elem, labels):
 
                                 # If a shared place already exists, we use that one
                                 if elem in gateways_input:
@@ -134,26 +128,26 @@ class JsonToPetriNetConverter:
                                     utils.add_arc_from_to(p, elements[elem], net)
 
                         # Source = task & target = task
-                        if bpmn_analyzer._get_type(elem, labels, irrelevant_shapes) == "Task":
+                        if bpmn_analyzer.get_type(elem, labels, irrelevant_shapes) == "Task":
                             p = self._get_new_place(net, elements, labels)
                             utils.add_arc_from_to(elements[s], p, net)
                             utils.add_arc_from_to(p, elements[elem], net)
 
                         # Source = task & target = event
-                        if bpmn_analyzer._get_type(elem, labels, irrelevant_shapes) == "Event":
+                        if bpmn_analyzer.get_type(elem, labels, irrelevant_shapes) == "Event":
                             utils.add_arc_from_to(elements[s], elements[elem], net)
 
                 # ++++++++++++++++++++++++++++++
                 # Source = gateway
                 # ++++++++++++++++++++++++++++++
-                if bpmn_analyzer._get_type(s, labels, irrelevant_shapes) == "Gateway":
+                if bpmn_analyzer.get_type(s, labels, irrelevant_shapes) == "Gateway":
                     for elem in postset:
 
                         # Source = parallel gateway (create place for each outgoing element)
                         if labels[s].startswith("Parallel"):
 
                             # Source = parallel gateway & target = event
-                            if bpmn_analyzer._get_type(elem, labels, irrelevant_shapes) == "Event":
+                            if bpmn_analyzer.get_type(elem, labels, irrelevant_shapes) == "Event":
                                 utils.add_arc_from_to(elements[s], elements[elem], net)
 
                             # Source = parallel gateway & target = task, gateway or other
@@ -164,10 +158,10 @@ class JsonToPetriNetConverter:
                                 utils.add_arc_from_to(p, elements[elem], net)
 
                         # Source: choice gateway (create shared place)
-                        if bpmn_analyzer._is_choice(s, labels):
+                        if bpmn_analyzer.is_choice(s, labels):
 
                             # Source = choice gateway & target = event
-                            if bpmn_analyzer._get_type(elem, labels, irrelevant_shapes) == "Event":
+                            if bpmn_analyzer.get_type(elem, labels, irrelevant_shapes) == "Event":
 
                                 # If a shared place is already available, we use it
                                 if s in gateways_output:
@@ -186,7 +180,7 @@ class JsonToPetriNetConverter:
                                     utils.add_arc_from_to(t, elements[elem], net)
 
                             # Source = choice gateway & target = gateway
-                            elif bpmn_analyzer._get_type(elem, labels, irrelevant_shapes) == "Gateway":
+                            elif bpmn_analyzer.get_type(elem, labels, irrelevant_shapes) == "Gateway":
 
                                 if s in gateways_output:
                                     output_p = gateways_output[s]
@@ -196,7 +190,7 @@ class JsonToPetriNetConverter:
                                     utils.add_arc_from_to(elements[s], output_p, net)
 
                                 # Source = choice gateway & target = choice gateway
-                                if bpmn_analyzer._is_choice(elem, labels):
+                                if bpmn_analyzer.is_choice(elem, labels):
 
                                     # If there is already an input place, we will use it
                                     if elem in gateways_input:
@@ -257,12 +251,12 @@ class JsonToPetriNetConverter:
 
         # Add missing start / end event
         for s in follows.keys():
-            if bpmn_analyzer._get_type(s, labels, irrelevant_shapes) == "Task":
-                if len(bpmn_analyzer._get_preset(labels, follows, s)) == 0:
+            if bpmn_analyzer.get_type(s, labels, irrelevant_shapes) == "Task":
+                if len(bpmn_analyzer.get_preset(labels, follows, s)) == 0:
                     p = self._get_new_place(net, elements, labels)
                     utils.add_arc_from_to(p, elements[s], net)
                     sources.add(p)
-                if len(bpmn_analyzer._get_postset(labels, follows, s)) == 0:
+                if len(bpmn_analyzer.get_postset(labels, follows, s)) == 0:
                     p = self._get_new_place(net, elements, labels)
                     utils.add_arc_from_to(elements[s], p, net)
                     sinks.add(p)
@@ -296,7 +290,7 @@ class JsonToPetriNetConverter:
         # Handle attached events
         for s in follows.keys():
             if labels[s] == "AttachedEvent":
-                origin = elements[bpmn_analyzer._get_preset(labels, follows, s).pop()]
+                origin = elements[bpmn_analyzer.get_preset(labels, follows, s).pop()]
 
                 origin_output = set()
                 for a in origin.out_arcs:
@@ -336,7 +330,7 @@ class JsonToPetriNetConverter:
         return p
 
     # Creates new tau transition
-    def _get_new_transition(self, net, elements,labels):
+    def _get_new_transition(self, net, elements, labels):
         t = PetriNet.Transition(self._get_new_key_index())
         net.transitions.add(t)
         elements[str(self._get_key_index())] = t

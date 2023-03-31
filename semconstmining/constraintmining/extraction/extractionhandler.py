@@ -24,9 +24,9 @@ class ExtractionHandler:
         self.model_extractor = ModelExtractor(config, resource_handler, types_to_ignore)
         self.declare_extractor = DeclareExtractor(config, resource_handler, types_to_ignore)
 
-        self.mp_observations_ser_file = self.config.DATA_INTERIM / (resource_handler.model_collection_id + "_" + self.config.MP_OBSERVATIONS_SER_FILE)
-        self.declare_ser_file = self.config.DATA_INTERIM / (resource_handler.model_collection_id + "_" + self.config.DECLARE_CONST)
-        self.constraint_kb_ser_file = self.config.DATA_INTERIM / (resource_handler.model_collection_id + "_" + self.config.CONSTRAINT_KB_SER_FILE)
+        self.mp_observations_ser_file = self.config.DATA_INTERIM / (self.config.MODEL_COLLECTION + "_" + self.config.MP_OBSERVATIONS_SER_FILE)
+        self.declare_ser_file = self.config.DATA_INTERIM / (self.config.MODEL_COLLECTION + "_" + self.config.DECLARE_CONST)
+        self.constraint_kb_ser_file = self.config.DATA_INTERIM / (self.config.MODEL_COLLECTION + "_" + self.config.CONSTRAINT_KB_SER_FILE)
 
         self.per_object_observations = None
         self.inter_object_observations = None

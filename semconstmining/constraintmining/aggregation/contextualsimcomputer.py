@@ -39,9 +39,9 @@ class ContextualSimilarityComputer:
         # reference to the resource handler
         self.resource_handler = resource_handler
         self.known_embedding_map_ser = self.config.DATA_INTERIM / \
-                                       (self.resource_handler.model_collection_id + "_" + self.config.EMB_MAP)
+                                       (self.config.MODEL_COLLECTION + "_" + self.config.EMB_MAP)
         self.knowm_sim_ser = self.config.DATA_INTERIM / \
-                             (self.resource_handler.model_collection_id + "_" + self.config.SIM_MAP)
+                             (self.config.MODEL_COLLECTION + "_" + self.config.SIM_MAP)
         self.known_embeddings = {} if not exists(self.known_embedding_map_ser) else read_pickle(
             self.known_embedding_map_ser)
         # Maps pairs of labels to their similarity
@@ -234,7 +234,7 @@ class ContextualSimilarityComputer:
         model_ids = [x.strip() for x in row[self.config.MODEL_ID].split("|")]
         concat_labels = list(
             self.resource_handler.bpmn_model_elements[
-                self.resource_handler.bpmn_model_elements[self.config.MODEL_ID_BACKUP].isin(model_ids)][self.config.LABEL_LIST].unique()
+                self.resource_handler.bpmn_model_elements[self.config.MODEL_ID].isin(model_ids)][self.config.LABEL_LIST].unique()
         )
         # Computing semantic similarity using sentence transformers is super expensive on CPU, therefore,
         # we randomly pick k names for which we make comparisons TODO any way to ground this procedure on something?
@@ -275,7 +275,7 @@ class ContextualSimilarityComputer:
                     model_ids.split("|")))
                 concat_labels = list(
                     self.resource_handler.bpmn_model_elements[
-                        self.resource_handler.bpmn_model_elements[self.config.MODEL_ID_BACKUP].isin(unique_ids)][self.config.LABEL_LIST].unique()
+                        self.resource_handler.bpmn_model_elements[self.config.MODEL_ID].isin(unique_ids)][self.config.LABEL_LIST].unique()
                 )
                 sentences += concat_labels
         sentences = [label_utils.sanitize_label(name) for name in sentences if not pd.isna(name) and

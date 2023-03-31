@@ -5,16 +5,15 @@ from semconstmining.declare.enums import Template
 
 class Config:
 
-    def __init__(self, project_root: Path):
+    def __init__(self, project_root: Path, model_collection="sap_sam_2022"):
         self.PROJECT_ROOT: Path = project_root
+        self.MODEL_COLLECTION = model_collection
         self.DATA_ROOT = self.PROJECT_ROOT / "data"
         self.DATA_RAW = self.DATA_ROOT / "raw"
         self.DATA_LOGS = self.DATA_ROOT / "logs"
         self.DATA_RESOURCES = self.DATA_ROOT / "resources"
-        self.DATA_DATASET = self.DATA_RAW / "sap_sam_2022" / "models"
-        self.DATA_OPAL_DATASET = self.DATA_RAW / "opal" / "models"
-        self.DATA_DATASET_DICT = self.DATA_RAW / "sap_sam_2022" / "dict"
-        self.DATA_OPAL_DATASET_DICT = self.DATA_RAW / "opal" / "dict"
+        self.DATA_DATASET = self.DATA_RAW / self.MODEL_COLLECTION / "models"
+        self.DATA_DATASET_DICT = self.DATA_RAW / self.MODEL_COLLECTION / "dict"
         self.DATA_INTERIM = self.DATA_ROOT / "interim"
         self.SRC_ROOT = self.PROJECT_ROOT / "src" / "semconstmining"
         self.FIGURES_ROOT = self.PROJECT_ROOT / "reports" / "figures"
@@ -109,10 +108,9 @@ class Config:
         self.OPERATOR_TYPE = "op_type"
         self.MODEL_NAME = "model_name"
         self.MODEL_ID = "model_id"
-        self.MODEL_ID_BACKUP = "m_id"
         self.ELEMENT_ID = "element_id"
+        self.ELEMENT_ID_BACKUP = "e_id"
         self.LABEL = "label"
-        self.ORIGINAL_LABEL = "original_label"
         self.GLOSSARY = "glossary"
         self.LABEL_LIST = "label_list"
         self.NAME = "name"
@@ -120,6 +118,9 @@ class Config:
         self.REDUNDANT = "redundant"
         self.NAT_LANG_OBJ = "nat_lang_obj"
         self.NAT_LANG_TEMPLATE = "nat_lang_template"
+        self.DATA_OBJECT = "data_object"
+        self.SOUND = "sound"
+        self.LOG = "log"
 
         # DIFFERENT TYPES OF CONTEXTUAL SIMILARITIES
         self.NAME_BASED_SIM = "name_based_sim"
@@ -204,3 +205,6 @@ class Config:
         # Language models used in the project
         self.SPACY_MODEL = "en_core_web_sm"
         self.SENTENCE_TRANSFORMER = "all-MiniLM-L6-v2"
+
+        # Do we consider loops when mining constraints?
+        self.LOOPS = True

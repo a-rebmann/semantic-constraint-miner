@@ -115,6 +115,9 @@ class ResourceHandler:
             for (dir_path, dir_names, filenames) in os.walk(self.config.PETRI_LOGS_DIR):
                 for filename in filenames:
                     os.remove(dir_path + "/" + filename)
+        _logger.info("Number of available logs: " + str(len(self.bpmn_logs[self.bpmn_logs[self.config.LOG].notna()])))
+        _logger.info("Number of available models: " + str(len(self.bpmn_logs)))
+        return
 
     def tag_task_labels(self):
         if exists(self.config.DATA_INTERIM / self.tagged_ser_file):

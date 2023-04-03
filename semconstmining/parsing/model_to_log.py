@@ -44,6 +44,7 @@ class Model2LogConverter:
         raise Exception("timeout")
 
     def generate_logs_lambda(self, df_petri, model_elements):
+        elms = model_elements.set_index(self.config.ELEMENT_ID_BACKUP)
         df_petri["sound"] = False
         df_petri["log"] = None
         df_results = []
@@ -55,7 +56,7 @@ class Model2LogConverter:
                 df = pd.read_pickle(self.config.PETRI_LOGS_DIR / file_name)
             else:
                 df[self.config.SOUND] = df.apply(lambda x: self.soundness_check(x), axis=1)
-                df[self.config.LOG] = df.apply(lambda x: self.log_creation_check(x, model_elements), axis=1)
+                df[self.config.LOG] = df.apply(lambda x: self.log_creation_check(x, elms), axis=1)
                 df.to_pickle(self.config.PETRI_LOGS_DIR / file_name)
             df_results.append(df)
         stop = time.time()
@@ -148,9 +149,8 @@ class Model2LogConverter:
                     played_out_log = create_log_without_loops(log)
                 else:
                     played_out_log = log
-                self.replace_attributes(played_out_log, row, model_elements)
             except Exception as ex:
-                _logger.warning("Time out during log creation.")
+                _logger.warning(str(ex))
                 _logger.warning(ex)
             finally:
                 signal.alarm(0)
@@ -158,11 +158,15 @@ class Model2LogConverter:
                 completed_in = round(stop - start, 2)
                 if completed_in > 1.5 * self.config.TIMEOUT:
                     _logger.error("Timeout not working!!")
+        if played_out_log is not None:
+            played_out_log = self.replace_attributes(played_out_log, row, model_elements)
         return played_out_log
 
     def replace_attributes(self, played_out_log, row, model_elements):
         for trace in played_out_log:
             for event in trace:
-                event[self.config.DATA_OBJECT] = model_elements.loc[event[self.config.XES_NAME], self.config.DATA_OBJECT]
-                event[self.config.ELEMENT_ID] = model_elements.loc[event[self.config.XES_NAME], self.config.ELEMENT_ID_BACKUP]
-                event[self.config.XES_NAME] = row.labels[event[self.config.XES_NAME]]
+                e_id = event[self.config.XES_NAME]
+                event[self.config.DATA_OBJECT] = model_elements.loc[e_id, self.config.DATA_OBJECT]
+                event[self.config.ELEMENT_ID] = e_id
+                event[self.config.XES_NAME] = row.labels[e_id]
+        return played_out_log

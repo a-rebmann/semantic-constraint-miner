@@ -120,7 +120,7 @@ nat_lang_templates = {
     Template.INIT.templ_str: "{1} is the first to occur",
     Template.END.templ_str: "{1} is the last to occur",
 
-    Template.CHOICE.templ_str: "{1} and {2} eventually occur in the same process instance",
+    Template.CHOICE.templ_str: "{1} or {2} or both eventually occur in the same process instance",
     Template.EXCLUSIVE_CHOICE.templ_str: "{1} or {2} occurs, but never both in the same process instance",
     Template.RESPONDED_EXISTENCE.templ_str: "if {1} occurs in the process instance, then {2} occurs as well",
     Template.RESPONSE.templ_str: "if {1} occurs, then {2} occurs at some point after {1}",

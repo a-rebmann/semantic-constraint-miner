@@ -112,6 +112,7 @@ class Config:
         self.ELEMENT_ID_BACKUP = "e_id"
         self.LABEL = "label"
         self.GLOSSARY = "glossary"
+        self.DICTIONARY = "dictionary"
         self.LABEL_LIST = "label_list"
         self.NAME = "name"
         self.SUPPORT = "support"

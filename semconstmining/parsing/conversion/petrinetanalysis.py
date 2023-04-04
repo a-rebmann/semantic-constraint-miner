@@ -74,4 +74,6 @@ def _is_relevant_label(task_name):
     #     return False
     if task_name.startswith("EventSubprocess") or task_name.startswith("Subprocess"):
         return False
+    if task_name.startswith("Collapsed") or task_name.startswith("Subprocess"):
+        return False
     return True

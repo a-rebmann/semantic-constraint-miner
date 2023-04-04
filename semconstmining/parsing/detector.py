@@ -24,13 +24,13 @@ class ModelLanguageDetector:
     def get_detected_natural_language_from_bpmn_model(self, df):
         df_labels = self.get_df_models_and_labels(df, " ")
         df_labels[self.config.DETECTED_NAT_LANG] = [self.get_language_from_code(self._get_text_language(label)) for label in tqdm(df_labels.label_list)]
-        #df_labels = df_labels.drop(columns=[self.config.LABEL], axis=1)
         df_labels = df_labels.drop_duplicates(ignore_index=True)
         return df_labels
 
     def get_df_models_and_labels(self, df, sep_str=" "):
         df_labels = df.drop(columns=[self.config.ELEMENT_CATEGORY, self.config.GLOSSARY, self.config.DATA_OBJECT,
-                                     self.config.ELEMENT_ID_BACKUP, self.config.CLEANED_LABEL], axis=1)
+                                     self.config.ELEMENT_ID_BACKUP, self.config.CLEANED_LABEL, self.config.DICTIONARY],
+                            axis=1)
         df_labels.label = df_labels.label.apply(lambda x: str(x or ''))
         df_labels = df_labels.drop_duplicates(ignore_index=True)
         df_labels[self.config.LABEL_LIST] = df_labels.groupby([self.config.MODEL_ID])[self.config.LABEL].transform(lambda x: sep_str.join(x))

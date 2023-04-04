@@ -14,7 +14,7 @@ from itertools import product
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 
-class Declare4Py:
+class Declare:
     """
     Wrapper that collects the input log and model, the supported templates, the output for the discovery, conformance
     checking and query checking tasks. In addition, it contains the computed binary encoding and frequent items
@@ -48,7 +48,8 @@ class Declare4Py:
         val = dict[ tuple[trace_pos_inside_log, trace_name] : CheckerResult ]
     """
 
-    def __init__(self):
+    def __init__(self, config):
+        self.config = config
         self.log = None
         self.model = None
         self.log_length = None
@@ -397,7 +398,7 @@ class Declare4Py:
             raise RuntimeError("Cardinality must be greater than 0.")
 
         self.discovery_results = {}
-
+        associated_entities = {}
         for item_set in self.frequent_item_sets['itemsets']:
             length = len(item_set)
             if length == 1:
@@ -423,8 +424,15 @@ class Declare4Py:
             with open(output_path, 'w') as f:
                 f.write(activities_decl_format)
                 f.write('\n'.join(self.discovery_results.keys()))
-
-        return self.discovery_results
+        for key in self.discovery_results:
+            for trace in self.log:
+                for event in trace:
+                    if event[self.config.XES_NAME] in key:
+                        if key not in associated_entities:
+                            associated_entities[key] = {self.config.DICTIONARY: set(), self.config.DATA_OBJECT: set()}
+                        associated_entities[key][self.config.DICTIONARY].update(event[self.config.DICTIONARY])
+                        associated_entities[key][self.config.DATA_OBJECT].update(event[self.config.DATA_OBJECT])
+        return self.discovery_results, associated_entities
 
     def filter_discovery(self, min_support: float = 0, output_path: str = None) \
             -> dict[str: dict[tuple[int, str]: CheckerResult]]:

@@ -29,7 +29,6 @@ def sanitize_label(label):
 
 
 def split_label(label):
-    label = label.lower()
     result = re.split('[^a-zA-Z]', label)
     return result
 

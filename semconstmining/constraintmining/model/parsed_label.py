@@ -11,7 +11,7 @@ def get_dummy(conf, label, lang):
 
 class ParsedLabel:
 
-    def __init__(self, config, label, split, tags, bos, actions, lang, dictionary_entries=None):
+    def __init__(self, config, label, split, tags, bos, actions, lang, dictionary_entries=None, data_objects=None):
         self.config = config
         self._stopwords = stopwords.words(lang)
         self.lang = lang
@@ -25,6 +25,7 @@ class ParsedLabel:
         self.main_action = self.actions[0].strip() if len(self.actions) > 0 else ""
         self.main_object = self._get_main_object()
         self.dictionary_entries = [] if dictionary_entries is None else dictionary_entries
+        self.data_objects = [] if data_objects is None else data_objects
 
     def get_act_bo_label(self):
         if self._act_bo_label is None:

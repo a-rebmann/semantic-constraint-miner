@@ -1,6 +1,6 @@
 import json
 
-from semconstmining.constraintmining.bert_parser import label_utils
+from semconstmining.parsing.bert_parser import label_utils
 
 
 def compute_finite_paths_of_tasks(follows, labels, tasks):

@@ -5,7 +5,7 @@ from os.path import exists
 import pandas as pd
 from tqdm import tqdm
 import json
-from semconstmining.constraintmining.bert_parser import BertTagger, label_utils
+from semconstmining.parsing.bert_parser import BertTagger, label_utils
 from semconstmining.constraintmining.model.parsed_label import ParsedLabel, get_dummy
 from semconstmining.parsing import parser
 from semconstmining.parsing import detector
@@ -39,22 +39,28 @@ class ResourceHandler:
 
     def get_parsed_task(self, t1):
         t1_parse = self.bpmn_model_elements[
-            self.bpmn_model_elements[self.config.CLEANED_LABEL] == t1].reset_index()
+            (self.bpmn_model_elements[self.config.CLEANED_LABEL] == t1)
+            & (~self.bpmn_model_elements[self.config.SPLIT_LABEL].isna())].reset_index()
         if len(t1_parse) == 0:
             return get_dummy(self.config, t1, self.config.EN)
         label = t1_parse[self.config.CLEANED_LABEL].values[0]
         split = t1_parse[self.config.SPLIT_LABEL].values[0]
         tags = t1_parse["tags"].values[0]
         dicts = []
-        if t1_parse['glossary'].values[0] != '{}':
-            dicts = [entry.replace("/glossary/", "") for entry in json.loads(t1_parse['glossary'].values[0])['name']]
+        d_objs = []
+        if t1_parse[self.config.DICTIONARY].values[0] != []:
+            dicts = t1_parse[self.config.DICTIONARY].values[0]
             dicts = [entry for entry in dicts if entry not in self.config.TERMS_FOR_MISSING]
+        if t1_parse[self.config.DATA_OBJECT].values[0] != []:
+            d_objs = t1_parse[self.config.DATA_OBJECT].values[0]
+            d_objs = [entry for entry in d_objs if entry not in self.config.TERMS_FOR_MISSING]
         if "lang" not in t1_parse.columns:
             lang = self.config.EN
         else:
             lang = t1_parse["lang"].values[0]
         return ParsedLabel(self.config, label, split, tags, self.bert_parser.find_objects(split, tags),
-                           self.bert_parser.find_actions(split, tags, lemmatize=True), lang, dicts)
+                           self.bert_parser.find_actions(split, tags, lemmatize=True), lang,
+                           dictionary_entries=dicts, data_objects=d_objs)
 
     def get_dictionary_entry(self, entry):
         if self.dictionary is None:
@@ -130,7 +136,7 @@ class ResourceHandler:
         else:
             _logger.info("Start tagging labels.")
             all_labs = list(
-                self.bpmn_model_elements[self.bpmn_model_elements[self.config.ELEMENT_CATEGORY] == "Task"][self.config.LABEL].unique())
+                self.bpmn_model_elements[(self.bpmn_model_elements[self.config.ELEMENT_CATEGORY] == "Task")][self.config.CLEANED_LABEL].unique())
             _logger.info(str(len(all_labs)) + " labels cleaned. " + "Start parsing.")
             all_labs_split = [label_utils.split_label(lab) for lab in tqdm(all_labs)]
             tagged = self.bert_parser.parse_labels(all_labs_split)
@@ -146,7 +152,8 @@ class ResourceHandler:
 
     def filter_only_english(self):
         _logger.info("Filtering for english labels.")
-        self.bpmn_model_elements = self.bpmn_model_elements[self.bpmn_model_elements[self.config.DETECTED_NAT_LANG] == self.config.EN]
+        self.bpmn_model_elements = self.bpmn_model_elements[self.bpmn_model_elements[self.config.DETECTED_NAT_LANG]
+                                                            == self.config.EN]
 
     def load_dictionary_if_exists(self):
         if self.dictionary_ser_file is None:
@@ -155,3 +162,16 @@ class ResourceHandler:
         if len(paths) > 0:
             _logger.info("Loading dictionary from " + str(paths[-1]))
             self.dictionary = parser.parse_dict_csv_raw(paths[-1])
+            if self.config.DICTIONARY not in self.bpmn_model_elements.columns:
+                self.bpmn_model_elements[self.config.DICTIONARY] = self.bpmn_model_elements[self.config.GLOSSARY].apply(
+                    lambda x: self.get_entries_from_dict(x))
+                self.bpmn_model_elements.to_pickle(self.config.DATA_INTERIM / self.elements_ser_file)
+        if self.config.DICTIONARY not in self.bpmn_model_elements.columns:
+            self.bpmn_model_elements[self.config.DICTIONARY] = []
+
+    def get_entries_from_dict(self, glossary_entries):
+        if glossary_entries == '{}' or glossary_entries == '{"name": [""]}':
+            return []
+        entries = [entry.replace("/glossary/", "") for entry in json.loads(glossary_entries)['name']]
+        return entries
+

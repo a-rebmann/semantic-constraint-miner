@@ -1,7 +1,7 @@
 from pm4py.objects.petri_net.obj import PetriNet, Marking
 from pm4py.objects.petri_net.utils import petri_utils as utils
 
-import semconstmining.constraintmining.conversion.bpmnjsonanalyzer as bpmn_analyzer
+import semconstmining.parsing.conversion.bpmnjsonanalyzer as bpmn_analyzer
 
 
 class JsonToPetriNetConverter:

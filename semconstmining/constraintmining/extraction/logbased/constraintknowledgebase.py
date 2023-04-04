@@ -1,4 +1,4 @@
-from semconstmining.constraintmining.bert_parser import label_utils
+from semconstmining.parsing.bert_parser import label_utils
 from semconstmining.conformance.similaritycomputer import SimMode
 from semconstmining.constraintmining.model.constraint import Observation, Constraint
 

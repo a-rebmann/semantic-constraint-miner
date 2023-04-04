@@ -9,7 +9,7 @@ from typing import List, Dict
 import pandas as pd
 from tqdm import tqdm
 
-from semconstmining.constraintmining.conversion.bpmnjsonanalyzer import fromJSON, is_relevant, get_type, \
+from semconstmining.parsing.conversion.bpmnjsonanalyzer import fromJSON, is_relevant, get_type, \
     get_full_postset
 
 _logger = logging.getLogger(__name__)
@@ -52,8 +52,6 @@ def _traverse_and_extract_data_object_relations(follows, labels):
                 if elem not in follows.keys():
                     continue
                 ty = get_type(elem, labels, ())
-                if ty not in ["Gateway", "Task", "Event"]:
-                    print(ty)
                 if ty == "Object":
                     if s in data_objects:
                         data_objects[s].append(elem)
@@ -141,15 +139,15 @@ class BpmnModelParser:
             # don't append root as element
             if element["resourceId"] == model_dict["resourceId"]:
                 continue
-
+            element_id = model_id + str(element["resourceId"])
             # NOTE: it's possible to add other attributes here, such as the bounds of an element
             record = {
-                self.config.ELEMENT_ID: model_id + str(element["resourceId"]),
-                self.config.ELEMENT_ID_BACKUP: model_id + str(element["resourceId"]),
+                self.config.ELEMENT_ID: element_id,
+                self.config.ELEMENT_ID_BACKUP: element_id,
                 self.config.ELEMENT_CATEGORY: element["stencil"].get("id") if "stencil" in element else None,
                 self.config.LABEL: element["properties"].get("name"),
                 self.config.GLOSSARY: json.dumps(element["glossaryLinks"]) if "glossaryLinks" in element else "{}",
-                self.config.DATA_OBJECT: str(data_object_relations[model_id + str(element["resourceId"])]) if model_id + str(element["resourceId"]) in data_object_relations else "[]",
+                self.config.DATA_OBJECT: data_object_relations[element_id] if element_id in data_object_relations else [],
             }
             if self.parse_parent:
                 record["parent"] = element.get("parent")

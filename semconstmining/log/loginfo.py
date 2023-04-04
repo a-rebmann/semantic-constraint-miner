@@ -1,5 +1,5 @@
 import pandas as pd
-from semconstmining.constraintmining.bert_parser import BertTagger
+from semconstmining.parsing.bert_parser import BertTagger
 
 
 class LogInfo:

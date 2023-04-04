@@ -6,8 +6,8 @@ from statistics import mean
 import pandas as pd
 from pandas import DataFrame
 from sentence_transformers import SentenceTransformer, util
-from semconstmining.constraintmining.bert_parser import label_utils
-from semconstmining.constraintmining.bert_parser.label_utils import LabelUtil
+from semconstmining.parsing.bert_parser import label_utils
+from semconstmining.parsing.bert_parser.label_utils import LabelUtil
 from nltk.corpus import wordnet
 from itertools import chain
 

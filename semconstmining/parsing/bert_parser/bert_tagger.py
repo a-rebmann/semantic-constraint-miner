@@ -1,7 +1,7 @@
-from semconstmining.constraintmining.bert_parser.label_utils import LabelUtil, split_label
+from semconstmining.parsing.bert_parser.label_utils import LabelUtil, split_label
 from semconstmining.constraintmining.model.parsed_label import ParsedLabel
-from semconstmining.constraintmining.bert_parser.bert_wrapper import BertWrapper
-from semconstmining.constraintmining.bert_parser.bert_for_label_parsing import BertForLabelParsing
+from semconstmining.parsing.bert_parser.bert_wrapper import BertWrapper
+from semconstmining.parsing.bert_parser.bert_for_label_parsing import BertForLabelParsing
 
 
 class BertTagger:

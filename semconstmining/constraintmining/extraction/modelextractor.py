@@ -6,10 +6,10 @@ from typing import List, Dict
 import pandas as pd
 import logging
 
-from semconstmining.constraintmining.bert_parser import label_utils
-from semconstmining.constraintmining.conversion.bpmnjsonanalyzer import process_bpmn_shapes
+from semconstmining.parsing.bert_parser import label_utils
+from semconstmining.parsing.conversion.bpmnjsonanalyzer import process_bpmn_shapes
 from semconstmining.constraintmining.model.constraint import Observation
-from semconstmining.constraintmining.conversion import bpmnjsonanalyzer as bpmn_analyzer
+from semconstmining.parsing.conversion import bpmnjsonanalyzer as bpmn_analyzer
 from semconstmining.declare.enums import Template
 from semconstmining.parsing.resource_handler import ResourceHandler
 

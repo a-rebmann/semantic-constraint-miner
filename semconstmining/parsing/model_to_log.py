@@ -14,8 +14,8 @@ import pandas as pd
 import numpy as np
 from func_timeout import func_timeout, FunctionTimedOut
 
-from semconstmining.constraintmining.conversion.bpmnjsonanalyzer import fromJSON
-from semconstmining.constraintmining.conversion.jsontopetrinetconverter import JsonToPetriNetConverter
+from semconstmining.parsing.conversion.bpmnjsonanalyzer import fromJSON
+from semconstmining.parsing.conversion.jsontopetrinetconverter import JsonToPetriNetConverter
 
 _logger = logging.getLogger(__name__)
 
@@ -159,14 +159,15 @@ class Model2LogConverter:
                 if completed_in > 1.5 * self.config.TIMEOUT:
                     _logger.error("Timeout not working!!")
         if played_out_log is not None:
-            played_out_log = self.replace_attributes(played_out_log, row, model_elements)
+            played_out_log = self.replace_attributes(played_out_log, model_elements)
         return played_out_log
 
-    def replace_attributes(self, played_out_log, row, model_elements):
+    def replace_attributes(self, played_out_log, model_elements):
         for trace in played_out_log:
             for event in trace:
                 e_id = event[self.config.XES_NAME]
                 event[self.config.DATA_OBJECT] = model_elements.loc[e_id, self.config.DATA_OBJECT]
                 event[self.config.ELEMENT_ID] = e_id
-                event[self.config.XES_NAME] = row.labels[e_id]
+                event[self.config.XES_NAME] = model_elements.loc[e_id, self.config.CLEANED_LABEL]
+                event[self.config.DICTIONARY] = model_elements.loc[e_id, self.config.DICTIONARY]
         return played_out_log

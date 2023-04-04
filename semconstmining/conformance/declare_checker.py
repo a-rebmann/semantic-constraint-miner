@@ -1,10 +1,10 @@
 from pandas import DataFrame
 from pm4py.objects.log.obj import EventLog, Trace, Event
 
-from semconstmining.constraintmining.bert_parser import BertTagger
-from semconstmining.constraintmining.conversion.petrinetanalysis import _is_relevant_label
+from semconstmining.parsing.bert_parser import BertTagger
+from semconstmining.parsing.conversion.petrinetanalysis import _is_relevant_label
 from semconstmining.constraintmining.model.parsed_label import get_dummy
-from semconstmining.declare.declare import Declare4Py
+from semconstmining.declare.declare import Declare
 from semconstmining.declare.parsers import parse_decl
 import pm4py
 
@@ -37,7 +37,7 @@ class DeclareChecker:
         res = {}
         bos = set([x.main_object for trace in filtered_traces for x in trace if x.main_object not in self.config.TERMS_FOR_MISSING])
         for bo in bos:
-            d4py = Declare4Py()
+            d4py = Declare(self.config)
             d4py.log = self.object_action_log_projection(bo, filtered_traces)
             constraint_strings = self.get_constraint_strings()
             d4py.model = parse_decl(constraint_strings)

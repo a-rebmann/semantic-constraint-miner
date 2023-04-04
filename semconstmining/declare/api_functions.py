@@ -1,6 +1,6 @@
 from math import ceil
 
-from .constraint_checkers import *
+from .checkers import *
 from .models import DeclModel
 
 

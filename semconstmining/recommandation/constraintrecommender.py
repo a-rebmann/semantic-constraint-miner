@@ -1,4 +1,5 @@
 import logging
+from typing import List
 
 from pandas import DataFrame
 from semconstmining.constraintmining.aggregation.contextualsimcomputer import ContextualSimilarityComputer
@@ -49,7 +50,7 @@ def recommend_const_for_log(log_info, context_sim_computer: ContextualSimilarity
 class ConstraintRecommender:
 
     def __init__(self, config, context_sim_computer: ContextualSimilarityComputer, log_info: LogInfo):
-        self.config=config
+        self.config = config
         self.context_sim_computer = context_sim_computer
         self.log_info = log_info
         # initialize embeddings for log

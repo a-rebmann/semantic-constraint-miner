@@ -123,7 +123,9 @@ class Config:
         self.IS_REFERENCED = "is_referenced"
         self.SOUND = "sound"
         self.LOG = "log"
+        self.ACTION = "action"
         self.ACTION_CATEGORY = "action_category"
+        self.TAGS = "tags"
 
 
         # DIFFERENT TYPES OF CONTEXTUAL SIMILARITIES
@@ -156,6 +158,7 @@ class Config:
         self.NL = "dutch"
 
         self.LANGUAGE = self.EN
+        self.LANG = "lang"
 
         # All binary constraint templates
         self.BINARY_TEMPLATES = [bin_temp.templ_str for bin_temp in Template.get_binary_templates()]
@@ -205,6 +208,23 @@ class Config:
                                for tok in obj.lower().split(" ")]
         self.SCHEMA_ORG_OBJ_PROP = [tok for obj in ['Age', 'Name', 'Type', 'Price', 'Cost'] for tok in
                                     obj.lower().split(" ")]
+        self.ACTION_CATEGORIES = {"Create": "An action is categorized as Create if it is about creating a new object.",
+                                  "Transform": "An action is categorized as Transform if it is about changing the "
+                                               "state of an object.",
+                                  "Move": "An action is categorized as Move if it is about moving an object from one "
+                                          "place to another.",
+                                  "Preserve": "An action is categorized as Preserve if it is about preserving an "
+                                              "object.",
+                                  "Destroy": "An action is categorized as Destroy if it is about destroying an object.",
+                                  "Separate": "An action is categorized as Separate if it is about separating an "
+                                              "object from another object.",
+                                  "Combine": "An action is categorized as Combine if it is about combining two objects.",
+                                  "Communicate": "An action is categorized as Communicate if it is about "
+                                                 "communicating with an object.",
+                                  "Decide": "An action is categorized as Decide if it is about deciding about an "
+                                            "object.",
+                                  "Assess": "An action is categorized as Assess if it is about assessing an object.",
+                                  "Manage": "An action is categorized as Manage if it is about managing an object."}
 
         # Language models used in the project
         self.SPACY_MODEL = "en_core_web_sm"
@@ -212,4 +232,3 @@ class Config:
 
         # Do we consider loops when mining constraints?
         self.LOOPS = True
-

@@ -210,6 +210,19 @@ def recommend_constraints_for_log(config, log_name, contextual_similarity_comput
     return fitted_constraints
 
 
+def get_filter_options(config, resource_handler: ResourceHandler):
+    return {
+        config.OPERATOR_TYPE: [config.UNARY, config.BINARY],
+        config.LEVEL: [config.OBJECT, config.MULTI_OBJECT, config.RESOURCE, config.DECISION],
+        config.DICTIONARY: resource_handler.get_names_of_dictionary_entries(),
+        config.DATA_OBJECT: resource_handler.get_names_of_data_objects(),
+        config.ACTION_CATEGORY: conf.ACTION_CATEGORIES,
+        config.ACTION: list(resource_handler.get_names_of_actions()),
+        config.OBJECT: list(resource_handler.get_names_of_objects()),
+        config.NAME: list(resource_handler.bpmn_model_elements[config.NAME].unique())
+    }
+
+
 def run_full_extraction_pipeline(config: Config, process: str, filter_config: FilterConfig = None,
                                  recommender_config: RecommendationConfig = None):
     # General pipeline for constraint extraction, no log-specific recommendation

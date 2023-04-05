@@ -42,6 +42,8 @@ class ResourceHandler:
         self.dictionary = None
         self.referenced_dict_entries = set()
         self.referenced_data_objects = set()
+        self.all_actions = None
+        self.all_objects = None
 
     def get_parsed_task(self, t1):
         """
@@ -54,7 +56,7 @@ class ResourceHandler:
             return get_dummy(self.config, t1, self.config.EN)
         label = t1_parse[self.config.CLEANED_LABEL].values[0]
         split = t1_parse[self.config.SPLIT_LABEL].values[0]
-        tags = t1_parse["tags"].values[0]
+        tags = t1_parse[self.config.TAGS].values[0]
         dicts = []
         d_objs = []
         if t1_parse[self.config.DICTIONARY].values[0] != []:
@@ -124,7 +126,8 @@ class ResourceHandler:
             _logger.info("Remove example models from " + str(len(self.bpmn_models)))
             pattern = '|'.join(self.config.EXAMPLE_MODEL_NAMES)
             df_no_example = self.bpmn_models[~self.bpmn_models[self.config.NAME].str.contains(pattern)]
-            df_example = self.bpmn_models[self.bpmn_models[self.config.NAME].str.contains(pattern)].drop_duplicates(subset=[self.config.NAME])
+            df_example = self.bpmn_models[self.bpmn_models[self.config.NAME].str.contains(pattern)].drop_duplicates(
+                subset=[self.config.NAME])
             self.bpmn_models = pd.concat([df_example, df_no_example])
             _logger.info(str(len(self.bpmn_models)) + " models remaining")
             self.bpmn_models.to_pickle(self.config.DATA_INTERIM / self.models_ser_file)
@@ -137,7 +140,8 @@ class ResourceHandler:
             _logger.info("Loading detected languages.")
             self.model_languages = pd.read_pickle(self.config.DATA_INTERIM / self.languages_ser_file)
             if self.config.DETECTED_NAT_LANG not in self.bpmn_model_elements.columns:
-                self.bpmn_model_elements = pd.merge(self.bpmn_model_elements, self.model_languages, how="left", on=self.config.MODEL_ID)
+                self.bpmn_model_elements = pd.merge(self.bpmn_model_elements, self.model_languages, how="left",
+                                                    on=self.config.MODEL_ID)
                 self.bpmn_model_elements.to_pickle(self.config.DATA_INTERIM / self.languages_ser_file)
         else:
             _logger.info("Detect languages.")
@@ -145,7 +149,8 @@ class ResourceHandler:
             self.model_languages = ld.get_detected_natural_language_from_bpmn_model(self.bpmn_model_elements)
             self.model_languages.to_pickle(self.config.DATA_INTERIM / self.languages_ser_file)
             if self.config.DETECTED_NAT_LANG not in self.bpmn_model_elements.columns:
-                self.bpmn_model_elements = pd.merge(self.bpmn_model_elements, self.model_languages, how="left", on=self.config.MODEL_ID)
+                self.bpmn_model_elements = pd.merge(self.bpmn_model_elements, self.model_languages, how="left",
+                                                    on=self.config.MODEL_ID)
                 self.bpmn_model_elements.to_pickle(self.config.DATA_INTERIM / self.elements_ser_file)
 
     def get_logs_for_sound_models(self):
@@ -180,7 +185,8 @@ class ResourceHandler:
         else:
             _logger.info("Start tagging labels.")
             all_labs = list(
-                self.bpmn_model_elements[(self.bpmn_model_elements[self.config.ELEMENT_CATEGORY] == "Task")][self.config.CLEANED_LABEL].unique())
+                self.bpmn_model_elements[(self.bpmn_model_elements[self.config.ELEMENT_CATEGORY] == "Task")][
+                    self.config.CLEANED_LABEL].unique())
             _logger.info(str(len(all_labs)) + " labels cleaned. " + "Start parsing.")
             all_labs_split = [label_utils.split_label(lab) for lab in tqdm(all_labs)]
             tagged = self.bert_parser.parse_labels(all_labs_split)
@@ -227,7 +233,31 @@ class ResourceHandler:
         """
         if glossary_entries == '{}' or glossary_entries == '{"name": [""]}':
             return []
-        entries = [entry.replace("/glossary/", "") for entry in json.loads(glossary_entries)['name']]
+        entries = [entry.replace("/glossary/", "") for entry in json.loads(glossary_entries)[self.config.NAME]]
         self.referenced_dict_entries.update(entries)
         return entries
 
+    def get_names_of_actions(self):
+        if not self.all_actions:
+            self.handle_all_actions_and_objects()
+        return self.all_actions
+
+    def get_names_of_objects(self):
+        if not self.all_objects:
+            self.handle_all_actions_and_objects()
+        return self.all_objects
+
+    def handle_all_actions_and_objects(self):
+        self.all_actions = set()
+        self.all_objects = set()
+        for index, row in self.bpmn_model_elements[
+            (~self.bpmn_model_elements[self.config.SPLIT_LABEL].isna())].iterrows():
+            parsed = ParsedLabel(self.config, row[self.config.CLEANED_LABEL],
+                                 row[self.config.SPLIT_LABEL], row[self.config.TAGS],
+                                 self.bert_parser.find_objects(row[self.config.SPLIT_LABEL],
+                                                               row[self.config.TAGS]),
+                                 self.bert_parser.find_actions(row[self.config.SPLIT_LABEL],
+                                                               row[self.config.TAGS],
+                                                               lemmatize=True), row[self.config.LANG])
+            self.all_actions.update(parsed.main_action)
+            self.all_objects.update(parsed.main_object)

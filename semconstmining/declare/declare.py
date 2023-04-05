@@ -365,7 +365,8 @@ class Declare:
 
         return self.conformance_checking_results
 
-    def discovery(self, consider_vacuity: bool, max_declare_cardinality: int = 3, output_path: str = None) \
+    def discovery(self, consider_vacuity: bool, max_declare_cardinality: int = 3, output_path: str = None,
+                  do_unary=True) \
             -> dict[str: dict[tuple[int, str]: CheckerResult]]:
         """
         Performs discovery of the supported DECLARE templates for the provided log by using the computed frequent item
@@ -381,6 +382,9 @@ class Declare:
 
         output_path : str, optional
             if specified, save the discovered constraints in a DECLARE model to the provided path.
+
+        do_unary : bool, optional
+            if True, unary constraints are considered (default True).
 
         Returns
         -------
@@ -401,7 +405,7 @@ class Declare:
         associated_entities = {}
         for item_set in self.frequent_item_sets['itemsets']:
             length = len(item_set)
-            if length == 1:
+            if do_unary and length == 1:
                 for templ in Template.get_unary_templates():
                     constraint = {"template": templ, "activities": list(item_set), "condition": ("", "")}
                     if not templ.supports_cardinality:

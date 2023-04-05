@@ -19,8 +19,11 @@ from semconstmining.constraintmining.aggregation.subsumptionanalyzer import Subs
 from semconstmining.constraintmining.model.constraint import Observation
 from semconstmining.declare.parsers.decl_parser import parse_single_constraint
 from semconstmining.declare.enums import nat_lang_templates, Template
+from semconstmining.recommandation.constraintfilter import ConstraintFilter
 from semconstmining.recommandation.constraintrecommender import ConstraintRecommender
 from semconstmining.recommandation.constraintfitter import ConstraintFitter
+from semconstmining.recommandation.filter_config import FilterConfig
+from semconstmining.recommandation.recommendation_config import RecommendationConfig
 
 warnings.simplefilter('ignore')
 import logging
@@ -187,7 +190,7 @@ def get_context_sim_computer(config, constraints, resource_handler, min_support=
     contextual_similarity_computer.compute_object_based_contextual_dissimilarity()
     contextual_similarity_computer.compute_label_based_contextual_dissimilarity()
     contextual_similarity_computer.compute_name_based_contextual_dissimilarity()
-    store_preprocessed(config, contextual_similarity_computer.resource_handler, contextual_similarity_computer.constraints,
+    store_preprocessed(config, contextual_similarity_computer.resource_handler, constraints,
                        min_support, dict_filter, mark_redundant, with_nat_lang)
     return contextual_similarity_computer
 
@@ -202,30 +205,32 @@ def recommend_constraints_for_log(config, log_name, contextual_similarity_comput
         return pd.DataFrame()
     recommender = ConstraintRecommender(config, contextual_similarity_computer, log_info)
     recommended_constraints = recommender.recommend_by_objects(sim_thresh=0.8)
-    # TODO do not hard-code filter based on a constraint type
-    recommended_constraints = recommended_constraints[recommended_constraints[config.LEVEL].str.contains(config.OBJECT)]
     constraint_fitter = ConstraintFitter(config, log_name, recommended_constraints)
     fitted_constraints = constraint_fitter.fit_constraints()
     return fitted_constraints
 
 
-def run_full_extraction_pipeline(config: Config, process: str):
-    lh = LogHandler(config)
+def run_full_extraction_pipeline(config: Config, process: str, filter_config: FilterConfig = None,
+                                 recommender_config: RecommendationConfig = None):
+    # General pipeline for constraint extraction, no log-specific recommendation
     resource_handler = get_resource_handler(config)
-    consts = get_all_constraints(config, resource_handler)
-    contextual_similarity_computer = get_context_sim_computer(config, consts, resource_handler)
+    all_constraints = get_all_constraints(config, resource_handler)
+    contextual_similarity_computer = get_context_sim_computer(config, all_constraints, resource_handler)
+    const_filter = ConstraintFilter(config, filter_config)
+    filtered_constraints = const_filter.filter_constraints(all_constraints)
+
+    # Log-specific constraint recommendation
+    lh = LogHandler(config)
     pd_log = lh.read_log(config.DATA_LOGS, process)
     if pd_log is None:
+        _logger.info("No log found for process " + process)
         return None
     labels = list(pd_log[config.XES_NAME].unique())
     log_info = LogInfo(resource_handler.bert_parser, labels, [process])
     recommender = ConstraintRecommender(config, contextual_similarity_computer, log_info)
-    recommended_constraints = recommender.recommend_by_objects(sim_thresh=0.1)
-    # TODO do not hard-code filter based on a constraint type
-    recommended_constraints = recommended_constraints[recommended_constraints[config.LEVEL].str.contains(config.OBJECT)]
-    # TODO here we should give the user an option to choose which constraints to add
-    #  and which to ignore
+    recommended_constraints = recommender.recommend(filtered_constraints, recommender_config)
     check_constraints(config, process, recommended_constraints)
+    _logger.info("Done")
 
 
 CURRENT_LOG_WS = "defaultview-2"
@@ -233,5 +238,8 @@ CURRENT_LOG_FILE = "semconsttest.xes"
 
 if __name__ == "__main__":
     conf = Config(Path(__file__).parents[2].resolve(), "opal")
-    run_full_extraction_pipeline(config=conf, process=CURRENT_LOG_WS)
+    filter_config = FilterConfig(conf, levels=[conf.OBJECT], arities=[conf.BINARY])
+    recommender_config = RecommendationConfig(conf)
+    run_full_extraction_pipeline(config=conf, process=CURRENT_LOG_FILE,
+                                 filter_config=filter_config, recommender_config=recommender_config)
     sys.exit(0)

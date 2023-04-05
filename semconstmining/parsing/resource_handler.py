@@ -18,6 +18,10 @@ _logger = logging.getLogger(__name__)
 
 
 class ResourceHandler:
+    """
+    This class is responsible for loading and saving the resources needed for the parsing and mining constraints.
+    It is also responsible for the conversion of the models to logs.
+    """
 
     def __init__(self, config):
         self.config = config
@@ -36,8 +40,13 @@ class ResourceHandler:
         self.bpmn_logs = None
         self.bpmn_task_labels = None
         self.dictionary = None
+        self.referenced_dict_entries = set()
+        self.referenced_data_objects = set()
 
     def get_parsed_task(self, t1):
+        """
+        This method returns the parsed label for a given label.
+        """
         t1_parse = self.bpmn_model_elements[
             (self.bpmn_model_elements[self.config.CLEANED_LABEL] == t1)
             & (~self.bpmn_model_elements[self.config.SPLIT_LABEL].isna())].reset_index()
@@ -63,6 +72,9 @@ class ResourceHandler:
                            dictionary_entries=dicts, data_objects=d_objs)
 
     def get_dictionary_entry(self, entry):
+        """
+        This method returns the name of a dictionary entry.
+        """
         if self.dictionary is None:
             self.load_dictionary_if_exists()
         if self.dictionary is None:
@@ -70,6 +82,9 @@ class ResourceHandler:
         return self.dictionary.loc[entry]['name']
 
     def load_bpmn_model_elements(self):
+        """
+        This method loads the model elements from the pickle file or parses them if the file does not exist.
+        """
         if exists(self.config.DATA_INTERIM / self.elements_ser_file):
             _logger.info("Loading elements from " + str(self.config.DATA_INTERIM / self.elements_ser_file) + ".")
             self.bpmn_model_elements = pd.read_pickle(self.config.DATA_INTERIM / self.elements_ser_file)
@@ -78,8 +93,28 @@ class ResourceHandler:
             self.bpmn_model_elements[self.config.CLEANED_LABEL] = self.bpmn_model_elements[self.config.LABEL].apply(
                 lambda x: label_utils.sanitize_label(str(x or '')))
             self.bpmn_model_elements.to_pickle(self.config.DATA_INTERIM / self.elements_ser_file)
+        self.referenced_data_objects = set(self.bpmn_model_elements[self.config.DATA_OBJECT].explode().unique())
+        _logger.info("There are " + str(len(self.referenced_data_objects)) + " referenced data objects.")
+        _logger.info("These have " + str(len(set(self.get_names_of_data_objects().values))) + " unique names.")
+        _logger.info("There are " + str(len(self.bpmn_model_elements)) + " elements in total.")
+
+    def get_names_of_data_objects(self):
+        """
+        This method returns the names of the data objects that are actually referenced from other model elements.
+        """
+        return self.bpmn_model_elements[self.bpmn_model_elements[
+            self.config.ELEMENT_ID_BACKUP].isin(self.referenced_data_objects)][self.config.LABEL]
+
+    def get_names_of_dictionary_entries(self):
+        """
+        This method returns the names of the dictionary entries that are actually referenced from model elements.
+        """
+        return self.dictionary[self.dictionary[self.config.IS_REFERENCED]][self.config.NAME]
 
     def load_bpmn_models(self):
+        """
+        This method loads the models from the pickle file or parses them if the file does not exist.
+        """
         if exists(self.config.DATA_INTERIM / self.models_ser_file):
             _logger.info("Loading models from " + str(self.config.DATA_INTERIM / self.models_ser_file) + ".")
             self.bpmn_models = pd.read_pickle(self.config.DATA_INTERIM / self.models_ser_file)
@@ -95,6 +130,9 @@ class ResourceHandler:
             self.bpmn_models.to_pickle(self.config.DATA_INTERIM / self.models_ser_file)
 
     def determine_model_languages(self):
+        """
+        This method determines the natural language of the models.
+        """
         if exists(self.config.DATA_INTERIM / self.languages_ser_file):
             _logger.info("Loading detected languages.")
             self.model_languages = pd.read_pickle(self.config.DATA_INTERIM / self.languages_ser_file)
@@ -111,6 +149,9 @@ class ResourceHandler:
                 self.bpmn_model_elements.to_pickle(self.config.DATA_INTERIM / self.elements_ser_file)
 
     def get_logs_for_sound_models(self):
+        """
+        This method returns the logs for the sound models.
+        """
         # Parse and convert the JSON-BPMNs to Petri nets
         if exists(self.config.DATA_INTERIM / self.logs_ser_file):
             self.bpmn_logs = pd.read_pickle(self.config.DATA_INTERIM / self.logs_ser_file)
@@ -126,6 +167,9 @@ class ResourceHandler:
         return
 
     def tag_task_labels(self):
+        """
+        This method tags the labels of the tasks. It extracts actions and objects from the labels.
+        """
         if exists(self.config.DATA_INTERIM / self.tagged_ser_file):
             _logger.info("Loading tagged labels.")
             self.bpmn_task_labels = pd.read_pickle(self.config.DATA_INTERIM / self.tagged_ser_file)
@@ -151,11 +195,17 @@ class ResourceHandler:
         _logger.info("We have " + str(len(self.bpmn_task_labels)) + " labels.")
 
     def filter_only_english(self):
+        """
+        This method filters the models for which the natural language is english.
+        """
         _logger.info("Filtering for english labels.")
         self.bpmn_model_elements = self.bpmn_model_elements[self.bpmn_model_elements[self.config.DETECTED_NAT_LANG]
                                                             == self.config.EN]
 
     def load_dictionary_if_exists(self):
+        """
+        This method loads the dictionary if it exists.
+        """
         if self.dictionary_ser_file is None:
             return
         paths = sorted(self.dictionary_ser_file.glob("*.csv"))
@@ -166,12 +216,18 @@ class ResourceHandler:
                 self.bpmn_model_elements[self.config.DICTIONARY] = self.bpmn_model_elements[self.config.GLOSSARY].apply(
                     lambda x: self.get_entries_from_dict(x))
                 self.bpmn_model_elements.to_pickle(self.config.DATA_INTERIM / self.elements_ser_file)
+                self.dictionary[self.config.IS_REFERENCED] = self.dictionary.index.apply(
+                    lambda x: x in self.referenced_dict_entries)
         if self.config.DICTIONARY not in self.bpmn_model_elements.columns:
             self.bpmn_model_elements[self.config.DICTIONARY] = []
 
     def get_entries_from_dict(self, glossary_entries):
+        """
+        This method returns the entries from the dictionary.
+        """
         if glossary_entries == '{}' or glossary_entries == '{"name": [""]}':
             return []
         entries = [entry.replace("/glossary/", "") for entry in json.loads(glossary_entries)['name']]
+        self.referenced_dict_entries.update(entries)
         return entries
 

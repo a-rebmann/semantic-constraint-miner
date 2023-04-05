@@ -165,12 +165,26 @@ class SubsumptionAnalyzer:
                                                           new_constraints,
                                                           Template.CO_EXISTENCE)
                     continue
+                # Existence(a, 1) && Absence(a, 2) == Exactly(a, 1)
+                if constraint["template"].templ_str == Template.EXACTLY.templ_str:
+                    first_const_str = Template.ABSENCE.templ_str
+                    second_const_str = Template.EXISTENCE.templ_str
+                    first_const_str += str(constraint['n'])
+                    first_const_str += str(constraint['n']+1)
+                    new_constraints = self._check_and_add(idx, constraint_row, constraint, first_const_str,
+                                                          new_constraints,
+                                                          Template.EXACTLY, add=False)
+                    new_constraints = self._check_and_add(idx, constraint_row, constraint, second_const_str,
+                                                          new_constraints,
+                                                          Template.EXACTLY, add=False)
+                    continue
+
 
         # merge the new constraints into the existing ones
         self.constraints = pd.concat([self.constraints.reset_index(), new_constraints])
 
     def _check_and_add(self, constraint_row_idx, constraint_row, constraint, other_const_str, new_constraints,
-                       template):
+                       template, add=True):
         if template.templ_str in self.types_to_ignore:
             return new_constraints
         to_mark = self.constraints[(self.constraints[self.config.CONSTRAINT_STR] == other_const_str) & (
@@ -184,10 +198,13 @@ class SubsumptionAnalyzer:
                 # mark both as redundant and add to new one!
                 if row[self.config.SUPPORT] == constraint_row[self.config.SUPPORT]:
                     self.constraints.at[i, self.config.REDUNDANT] = True  # sets the opponent constraint as redundant
-                    self.constraints.at[
-                        constraint_row_idx, self.config.REDUNDANT] = True  # sets the current constraint as redundant
-                    new_const_str = _construct_constraint(constraint, template)
-                    row_copy[self.config.CONSTRAINT_STR] = new_const_str
-                    row_copy[self.config.RECORD_ID] = str(uuid.uuid4())
-                    return new_constraints.append(row_copy, ignore_index=True)
+                    if add:
+                        self.constraints.at[
+                            constraint_row_idx, self.config.REDUNDANT] = True  # sets the current constraint as redundant
+                        new_const_str = _construct_constraint(constraint, template)
+                        row_copy[self.config.CONSTRAINT_STR] = new_const_str
+                        row_copy[self.config.RECORD_ID] = str(uuid.uuid4())
+                        return new_constraints.append(row_copy, ignore_index=True)
+                    else:
+                        return new_constraints
         return new_constraints

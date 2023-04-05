@@ -120,8 +120,11 @@ class Config:
         self.NAT_LANG_OBJ = "nat_lang_obj"
         self.NAT_LANG_TEMPLATE = "nat_lang_template"
         self.DATA_OBJECT = "data_object"
+        self.IS_REFERENCED = "is_referenced"
         self.SOUND = "sound"
         self.LOG = "log"
+        self.ACTION_CATEGORY = "action_category"
+
 
         # DIFFERENT TYPES OF CONTEXTUAL SIMILARITIES
         self.NAME_BASED_SIM = "name_based_sim"
@@ -209,3 +212,4 @@ class Config:
 
         # Do we consider loops when mining constraints?
         self.LOOPS = True
+

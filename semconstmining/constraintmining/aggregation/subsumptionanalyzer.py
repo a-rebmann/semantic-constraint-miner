@@ -168,13 +168,17 @@ class SubsumptionAnalyzer:
                 # Existence(a, 1) && Absence(a, 2) == Exactly(a, 1)
                 if constraint["template"].templ_str == Template.EXACTLY.templ_str:
                     first_const_str = Template.ABSENCE.templ_str
+                    first_const_str += str(int(constraint['n']) + 1)
+                    first_const_str += '[' + ", ".join(constraint["activities"]) + '] |' + ' |'.join(
+                        constraint["condition"])
                     second_const_str = Template.EXISTENCE.templ_str
-                    first_const_str += str(constraint['n'])
-                    first_const_str += str(constraint['n']+1)
-                    new_constraints = self._check_and_add(idx, constraint_row, constraint, first_const_str,
+                    second_const_str += str(constraint['n'])
+                    second_const_str += '[' + ", ".join(constraint["activities"]) + '] |' + ' |'.join(
+                        constraint["condition"])
+                    self._check_and_add(idx, constraint_row, constraint, first_const_str,
                                                           new_constraints,
                                                           Template.EXACTLY, add=False)
-                    new_constraints = self._check_and_add(idx, constraint_row, constraint, second_const_str,
+                    self._check_and_add(idx, constraint_row, constraint, second_const_str,
                                                           new_constraints,
                                                           Template.EXACTLY, add=False)
                     continue

@@ -16,13 +16,13 @@ class ConstraintRecommender:
         self.log_info = log_info
 
     def recommend_general_by_objects(self, constraints, sim_thresh) -> DataFrame:
-        return constraints[constraints[self.config.OBJECT_BASED_SIM] <= sim_thresh]
+        return constraints[constraints[self.config.OBJECT_BASED_SIM] >= sim_thresh]
 
     def recommend_general_by_names(self, constraints, sim_thresh) -> DataFrame:
-        return constraints[constraints[self.config.NAME_BASED_SIM] <= sim_thresh]
+        return constraints[constraints[self.config.NAME_BASED_SIM] >= sim_thresh]
 
     def recommend_general_by_labels(self, constraints, sim_thresh) -> DataFrame:
-        return constraints[constraints[self.config.LABEL_BASED_SIM] <= sim_thresh]
+        return constraints[constraints[self.config.LABEL_BASED_SIM] >= sim_thresh]
 
     def recommend_by_objects(self, constraints, sim_thresh) -> DataFrame:
         if len(self.log_info.objects) == 0:

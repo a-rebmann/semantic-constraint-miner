@@ -45,18 +45,22 @@ class ResourceHandler:
         self.parsed_tasks = {}
         self.all_actions = None
         self.all_objects = None
+        self.filter_options = None
 
     def get_filter_options(self):
-        return {
-            self.config.OPERATOR_TYPE: [self.config.UNARY, self.config.BINARY],
-            self.config.LEVEL: [self.config.OBJECT, self.config.MULTI_OBJECT, self.config.RESOURCE, self.config.DECISION],
-            self.config.DICTIONARY: self.get_names_of_dictionary_entries(),
-            self.config.DATA_OBJECT: self.get_names_of_data_objects(),
-            self.config.ACTION_CATEGORY: self.config.ACTION_CATEGORIES,
-            self.config.ACTION: list(self.get_names_of_actions()),
-            self.config.OBJECT: list(self.get_names_of_objects()),
-            self.config.NAME: list(self.bpmn_models[self.config.NAME].unique())
-        }
+        if self.filter_options is None:
+            self.filter_options = {
+                self.config.OPERATOR_TYPE: [self.config.UNARY, self.config.BINARY],
+                self.config.LEVEL: [self.config.OBJECT, self.config.MULTI_OBJECT, self.config.RESOURCE,
+                                    self.config.DECISION],
+                self.config.DICTIONARY: self.get_names_of_dictionary_entries(),
+                self.config.DATA_OBJECT: self.get_names_of_data_objects(),
+                self.config.ACTION_CATEGORY: self.config.ACTION_CATEGORIES,
+                self.config.ACTION: list(self.get_names_of_actions()),
+                self.config.OBJECT: list(self.get_names_of_objects()),
+                self.config.NAME: list(self.bpmn_models[self.config.NAME].unique())
+            }
+        return self.filter_options
 
     def get_parsed_task(self, t1):
         """
@@ -85,8 +89,8 @@ class ResourceHandler:
         else:
             lang = t1_parse["lang"].values[0]
         parsed = ParsedLabel(self.config, label, split, tags, self.bert_parser.find_objects(split, tags),
-                           self.bert_parser.find_actions(split, tags, lemmatize=True), lang,
-                           dictionary_entries=dicts, data_objects=d_objs)
+                             self.bert_parser.find_actions(split, tags, lemmatize=True), lang,
+                             dictionary_entries=dicts, data_objects=d_objs)
         self.parsed_tasks[t1] = parsed
         return parsed
 

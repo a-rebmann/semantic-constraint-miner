@@ -42,13 +42,28 @@ class ResourceHandler:
         self.dictionary = None
         self.referenced_dict_entries = set()
         self.referenced_data_objects = set()
+        self.parsed_tasks = {}
         self.all_actions = None
         self.all_objects = None
+
+    def get_filter_options(self):
+        return {
+            self.config.OPERATOR_TYPE: [self.config.UNARY, self.config.BINARY],
+            self.config.LEVEL: [self.config.OBJECT, self.config.MULTI_OBJECT, self.config.RESOURCE, self.config.DECISION],
+            self.config.DICTIONARY: self.get_names_of_dictionary_entries(),
+            self.config.DATA_OBJECT: self.get_names_of_data_objects(),
+            self.config.ACTION_CATEGORY: self.config.ACTION_CATEGORIES,
+            self.config.ACTION: list(self.get_names_of_actions()),
+            self.config.OBJECT: list(self.get_names_of_objects()),
+            self.config.NAME: list(self.bpmn_models[self.config.NAME].unique())
+        }
 
     def get_parsed_task(self, t1):
         """
         This method returns the parsed label for a given label.
         """
+        if t1 in self.parsed_tasks:
+            return self.parsed_tasks[t1]
         t1_parse = self.bpmn_model_elements[
             (self.bpmn_model_elements[self.config.CLEANED_LABEL] == t1)
             & (~self.bpmn_model_elements[self.config.SPLIT_LABEL].isna())].reset_index()
@@ -69,9 +84,11 @@ class ResourceHandler:
             lang = self.config.EN
         else:
             lang = t1_parse["lang"].values[0]
-        return ParsedLabel(self.config, label, split, tags, self.bert_parser.find_objects(split, tags),
+        parsed = ParsedLabel(self.config, label, split, tags, self.bert_parser.find_objects(split, tags),
                            self.bert_parser.find_actions(split, tags, lemmatize=True), lang,
                            dictionary_entries=dicts, data_objects=d_objs)
+        self.parsed_tasks[t1] = parsed
+        return parsed
 
     def get_dictionary_entry(self, entry):
         """
@@ -97,21 +114,21 @@ class ResourceHandler:
             self.bpmn_model_elements.to_pickle(self.config.DATA_INTERIM / self.elements_ser_file)
         self.referenced_data_objects = set(self.bpmn_model_elements[self.config.DATA_OBJECT].explode().unique())
         _logger.info("There are " + str(len(self.referenced_data_objects)) + " referenced data objects.")
-        _logger.info("These have " + str(len(set(self.get_names_of_data_objects().values))) + " unique names.")
+        _logger.info("These have " + str(len(self.get_names_of_data_objects())) + " unique names.")
         _logger.info("There are " + str(len(self.bpmn_model_elements)) + " elements in total.")
 
     def get_names_of_data_objects(self):
         """
         This method returns the names of the data objects that are actually referenced from other model elements.
         """
-        return self.bpmn_model_elements[self.bpmn_model_elements[
-            self.config.ELEMENT_ID_BACKUP].isin(self.referenced_data_objects)][self.config.LABEL]
+        return list(self.bpmn_model_elements[self.bpmn_model_elements[
+            self.config.ELEMENT_ID_BACKUP].isin(self.referenced_data_objects)][self.config.LABEL].unique())
 
     def get_names_of_dictionary_entries(self):
         """
         This method returns the names of the dictionary entries that are actually referenced from model elements.
         """
-        return self.dictionary[self.dictionary[self.config.IS_REFERENCED]][self.config.NAME]
+        return list(self.dictionary[self.dictionary[self.config.IS_REFERENCED]][self.config.NAME].unique())
 
     def load_bpmn_models(self):
         """
@@ -222,8 +239,9 @@ class ResourceHandler:
                 self.bpmn_model_elements[self.config.DICTIONARY] = self.bpmn_model_elements[self.config.GLOSSARY].apply(
                     lambda x: self.get_entries_from_dict(x))
                 self.bpmn_model_elements.to_pickle(self.config.DATA_INTERIM / self.elements_ser_file)
-                self.dictionary[self.config.IS_REFERENCED] = self.dictionary.index.apply(
-                    lambda x: x in self.referenced_dict_entries)
+            for entries in self.bpmn_model_elements[self.config.DICTIONARY]:
+                self.referenced_dict_entries.update(entries)
+            self.dictionary[self.config.IS_REFERENCED] = self.dictionary.index.isin(self.referenced_dict_entries)
         if self.config.DICTIONARY not in self.bpmn_model_elements.columns:
             self.bpmn_model_elements[self.config.DICTIONARY] = []
 
@@ -234,7 +252,6 @@ class ResourceHandler:
         if glossary_entries == '{}' or glossary_entries == '{"name": [""]}':
             return []
         entries = [entry.replace("/glossary/", "") for entry in json.loads(glossary_entries)[self.config.NAME]]
-        self.referenced_dict_entries.update(entries)
         return entries
 
     def get_names_of_actions(self):
@@ -252,12 +269,16 @@ class ResourceHandler:
         self.all_objects = set()
         for index, row in self.bpmn_model_elements[
             (~self.bpmn_model_elements[self.config.SPLIT_LABEL].isna())].iterrows():
-            parsed = ParsedLabel(self.config, row[self.config.CLEANED_LABEL],
-                                 row[self.config.SPLIT_LABEL], row[self.config.TAGS],
-                                 self.bert_parser.find_objects(row[self.config.SPLIT_LABEL],
-                                                               row[self.config.TAGS]),
-                                 self.bert_parser.find_actions(row[self.config.SPLIT_LABEL],
-                                                               row[self.config.TAGS],
-                                                               lemmatize=True), row[self.config.LANG])
-            self.all_actions.update(parsed.main_action)
-            self.all_objects.update(parsed.main_object)
+            if row[self.config.CLEANED_LABEL] in self.parsed_tasks:
+                parsed = self.parsed_tasks[row[self.config.CLEANED_LABEL]]
+            else:
+                parsed = ParsedLabel(self.config, row[self.config.CLEANED_LABEL],
+                                     row[self.config.SPLIT_LABEL], row[self.config.TAGS],
+                                     self.bert_parser.find_objects(row[self.config.SPLIT_LABEL],
+                                                                   row[self.config.TAGS]),
+                                     self.bert_parser.find_actions(row[self.config.SPLIT_LABEL],
+                                                                   row[self.config.TAGS],
+                                                                   lemmatize=True), row[self.config.LANG])
+                self.parsed_tasks[row[self.config.CLEANED_LABEL]] = parsed
+            self.all_actions.add(parsed.main_action)
+            self.all_objects.add(parsed.main_object)

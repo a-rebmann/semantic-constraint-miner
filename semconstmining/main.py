@@ -110,7 +110,8 @@ def get_all_constraints(config, resource_handler, min_support=2, dict_filter=Fal
                                      "_" + "redundant=" + str(mark_redundant) +
                                      "_" + "nat_lang=" + str(with_nat_lang) +
                                      "_" + config.PREPROCESSED_CONSTRAINTS)):
-        constraints = load_preprocessed(config, resource_handler, min_support, dict_filter, mark_redundant, with_nat_lang)
+        constraints = load_preprocessed(config, resource_handler, min_support, dict_filter, mark_redundant,
+                                        with_nat_lang)
     else:
         if min_support > 1:
             constraints = eh.aggregate_constraints(min_support=min_support)
@@ -133,7 +134,8 @@ def get_all_constraints(config, resource_handler, min_support=2, dict_filter=Fal
                     parse_single_constraint(x)["template"].templ_str if parse_single_constraint(x) is not None else
                     x.split("[")[0]])
         constraints.reset_index(inplace=True)
-        store_preprocessed(config, resource_handler, constraints, min_support, dict_filter, mark_redundant, with_nat_lang)
+        store_preprocessed(config, resource_handler, constraints, min_support, dict_filter, mark_redundant,
+                           with_nat_lang)
     return constraints[~constraints[config.REDUNDANT]]
 
 
@@ -204,29 +206,17 @@ def recommend_constraints_for_log(config, log_name, contextual_similarity_comput
     else:
         return pd.DataFrame()
     recommender = ConstraintRecommender(config, contextual_similarity_computer, log_info)
-    recommended_constraints = recommender.recommend_by_objects(sim_thresh=0.8)
+    recommended_constraints = recommender.recommend()
     constraint_fitter = ConstraintFitter(config, log_name, recommended_constraints)
     fitted_constraints = constraint_fitter.fit_constraints()
     return fitted_constraints
-
-
-def get_filter_options(config, resource_handler: ResourceHandler):
-    return {
-        config.OPERATOR_TYPE: [config.UNARY, config.BINARY],
-        config.LEVEL: [config.OBJECT, config.MULTI_OBJECT, config.RESOURCE, config.DECISION],
-        config.DICTIONARY: resource_handler.get_names_of_dictionary_entries(),
-        config.DATA_OBJECT: resource_handler.get_names_of_data_objects(),
-        config.ACTION_CATEGORY: conf.ACTION_CATEGORIES,
-        config.ACTION: list(resource_handler.get_names_of_actions()),
-        config.OBJECT: list(resource_handler.get_names_of_objects()),
-        config.NAME: list(resource_handler.bpmn_model_elements[config.NAME].unique())
-    }
 
 
 def run_full_extraction_pipeline(config: Config, process: str, filter_config: FilterConfig = None,
                                  recommender_config: RecommendationConfig = None):
     # General pipeline for constraint extraction, no log-specific recommendation
     resource_handler = get_resource_handler(config)
+    options = resource_handler.get_filter_options()
     all_constraints = get_all_constraints(config, resource_handler)
     contextual_similarity_computer = get_context_sim_computer(config, all_constraints, resource_handler)
     const_filter = ConstraintFilter(config, filter_config)

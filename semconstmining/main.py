@@ -165,6 +165,7 @@ def get_resource_handler(config):
     resource_handler.load_bpmn_models()
     resource_handler.get_logs_for_sound_models()
     resource_handler.tag_task_labels()
+    resource_handler.load_or_create_components()
     return resource_handler
 
 

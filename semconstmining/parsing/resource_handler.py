@@ -260,9 +260,10 @@ class ResourceHandler:
         if self.config.DICTIONARY not in self.bpmn_model_elements.columns:
             self.bpmn_model_elements[self.config.DICTIONARY] = []
 
-    def load_of_create_components(self):
+    def load_or_create_components(self):
         """
-        This method
+        This method loads important components, i.e., actions, objects, referenced dictionary entries,
+        data objects, and parsed labels, if they have been processed, otherwise creates and saves them.
         """
         if exists(self.config.DATA_INTERIM / self.comp_ser_file):
             self.components = read_pickle(self.config.DATA_INTERIM / self.models_ser_file)

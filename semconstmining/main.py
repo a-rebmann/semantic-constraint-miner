@@ -220,7 +220,7 @@ def run_full_extraction_pipeline(config: Config, process: str, filter_config: Fi
     options = resource_handler.get_filter_options()
     all_constraints = get_all_constraints(config, resource_handler)
     contextual_similarity_computer = get_context_sim_computer(config, all_constraints, resource_handler)
-    const_filter = ConstraintFilter(config, filter_config)
+    const_filter = ConstraintFilter(config, filter_config, resource_handler)
     filtered_constraints = const_filter.filter_constraints(all_constraints)
 
     # Log-specific constraint recommendation
@@ -242,7 +242,7 @@ CURRENT_LOG_FILE = "semconsttest.xes"
 
 if __name__ == "__main__":
     conf = Config(Path(__file__).parents[2].resolve(), "opal")
-    filter_config = FilterConfig(conf, levels=[conf.OBJECT], arities=[conf.BINARY])
+    filter_config = FilterConfig(conf, levels=[conf.OBJECT], arities=[conf.BINARY], data_objects=["Development Plan"])
     recommender_config = RecommendationConfig(conf)
     run_full_extraction_pipeline(config=conf, process=CURRENT_LOG_FILE,
                                  filter_config=filter_config, recommender_config=recommender_config)

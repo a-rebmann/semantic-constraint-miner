@@ -109,6 +109,9 @@ class DeclareExtractor:
         d4py.log = self.object_log_projection(filtered_traces)
         d4py.compute_frequent_itemsets(min_support=0.99, len_itemset=2)
         individual_res, associations = d4py.discovery(consider_vacuity=False, max_declare_cardinality=2, do_unary=False)
+        if any(len(y) > 0 for val in associations.values() for x in val.values() for y in x):
+            #_logger.info(associations)
+            pass
         res.update(const for const, checker_results in individual_res.items()
                    if "[]" not in const and "[none]" not in const
                    and ''.join([i for i in const.split("[")[0] if not i.isdigit()]) not in self.types_to_ignore)

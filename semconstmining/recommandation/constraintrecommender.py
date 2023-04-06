@@ -16,15 +16,23 @@ class ConstraintRecommender:
         self.log_info = log_info
 
     def recommend_general_by_objects(self, constraints, sim_thresh) -> DataFrame:
+        if len(constraints) == 0:
+            return constraints
         return constraints[constraints[self.config.OBJECT_BASED_SIM] >= sim_thresh]
 
     def recommend_general_by_names(self, constraints, sim_thresh) -> DataFrame:
+        if len(constraints) == 0:
+            return constraints
         return constraints[constraints[self.config.NAME_BASED_SIM] >= sim_thresh]
 
     def recommend_general_by_labels(self, constraints, sim_thresh) -> DataFrame:
+        if len(constraints) == 0:
+            return constraints
         return constraints[constraints[self.config.LABEL_BASED_SIM] >= sim_thresh]
 
     def recommend_by_objects(self, constraints, sim_thresh) -> DataFrame:
+        if len(constraints) == 0:
+            return constraints
         if len(self.log_info.objects) == 0:
             raise RuntimeError("No objects available")
         if self.config.OBJECT_BASED_SIM_EXTERNAL not in constraints.columns:
@@ -34,6 +42,8 @@ class ConstraintRecommender:
         return constraints[constraints[self.config.MAX_OBJECT_BASED_SIM_EXTERNAL] >= sim_thresh]
 
     def recommend_by_names(self, constraints, sim_thresh) -> DataFrame:
+        if len(constraints) == 0:
+            return constraints
         if len(self.log_info.names) == 0:
             raise RuntimeError("No names available")
         if self.config.NAME_BASED_SIM_EXTERNAL not in constraints.columns:
@@ -43,6 +53,8 @@ class ConstraintRecommender:
         return constraints[constraints[self.config.NAME_BASED_SIM_EXTERNAL] >= sim_thresh]
 
     def recommend_by_labels(self, constraints, sim_thresh) -> DataFrame:
+        if len(constraints) == 0:
+            return constraints
         if len(self.log_info.labels) == 0:
             raise RuntimeError("No labels available")
         if self.config.LABEL_BASED_SIM_EXTERNAL not in constraints.columns:
@@ -52,6 +64,8 @@ class ConstraintRecommender:
         return constraints[constraints[self.config.LABEL_BASED_SIM_EXTERNAL] >= sim_thresh]
 
     def recommend(self, constraints, recommender_config: RecommendationConfig):
+        if len(constraints) == 0:
+            return constraints
         constraints = constraints.copy(deep=True)
         constraints = self.recommend_general_by_objects(constraints, sim_thresh=recommender_config.object_thresh)
         constraints = self.recommend_general_by_names(constraints, sim_thresh=recommender_config.name_thresh)

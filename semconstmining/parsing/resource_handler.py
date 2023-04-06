@@ -131,18 +131,28 @@ class ResourceHandler:
         _logger.info("These have " + str(len(self.get_names_of_data_objects())) + " unique names.")
         _logger.info("There are " + str(len(self.bpmn_model_elements)) + " elements in total.")
 
-    def get_names_of_data_objects(self):
+    def get_names_of_data_objects(self, ids=None):
         """
         This method returns the names of the data objects that are actually referenced from other model elements.
         """
-        return list(self.bpmn_model_elements[self.bpmn_model_elements[
-            self.config.ELEMENT_ID_BACKUP].isin(self.referenced_data_objects)][self.config.LABEL].unique())
+        if ids is None:
+            return list(self.bpmn_model_elements[self.bpmn_model_elements[
+                self.config.ELEMENT_ID_BACKUP].isin(self.referenced_data_objects)][self.config.LABEL].unique())
+        else:
+            return list(self.bpmn_model_elements[self.bpmn_model_elements[
+                self.config.ELEMENT_ID_BACKUP].isin(self.referenced_data_objects)
+                        & self.bpmn_model_elements[self.config.ELEMENT_ID_BACKUP].isin(ids)]
+                        [self.config.LABEL].unique())
 
-    def get_names_of_dictionary_entries(self):
+    def get_names_of_dictionary_entries(self, ids=None):
         """
         This method returns the names of the dictionary entries that are actually referenced from model elements.
         """
-        return list(self.dictionary[self.dictionary[self.config.IS_REFERENCED]][self.config.NAME].unique())
+        if ids is None:
+            return list(self.dictionary[self.dictionary[self.config.IS_REFERENCED]][self.config.NAME].unique())
+        else:
+            return list(self.dictionary[self.dictionary[self.config.IS_REFERENCED] & self.dictionary.index.isin(ids)]
+                 [self.config.NAME].unique())
 
     def load_bpmn_models(self):
         """
@@ -291,7 +301,12 @@ class ResourceHandler:
                                                                    row[self.config.TAGS]),
                                      self.bert_parser.find_actions(row[self.config.SPLIT_LABEL],
                                                                    row[self.config.TAGS],
-                                                                   lemmatize=True), row[self.config.LANG])
+                                                                   lemmatize=True),
+                                     row[self.config.LANG],
+                                     [entry for entry in row[self.config.DICTIONARY]
+                                      if entry not in self.config.TERMS_FOR_MISSING],
+                                     [entry for entry in row[self.config.DATA_OBJECT]
+                                      if entry not in self.config.TERMS_FOR_MISSING])
                 self.components.parsed_tasks[row[self.config.CLEANED_LABEL]] = parsed
             self.components.all_actions.add(parsed.main_action)
             self.components.all_objects.add(parsed.main_object)

@@ -266,7 +266,7 @@ class ResourceHandler:
         data objects, and parsed labels, if they have been processed, otherwise creates and saves them.
         """
         if exists(self.config.DATA_INTERIM / self.comp_ser_file):
-            self.components = read_pickle(self.config.DATA_INTERIM / self.models_ser_file)
+            self.components = read_pickle(self.config.DATA_INTERIM / self.comp_ser_file)
         else:
             self.handle_all_actions_and_objects()
             write_pickle(self.components, self.config.DATA_INTERIM / self.comp_ser_file)

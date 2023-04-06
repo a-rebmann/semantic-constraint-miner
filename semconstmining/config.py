@@ -31,6 +31,7 @@ class Config:
         self.CONSTRAINT_KB_SER_FILE = "constraint_kb.pkl"
         self.PREPROCESSED_CONSTRAINTS = "preprocessed_constraints.pkl"
         self.LOG_INFO = "log_info.pkl"
+        self.COMPONENTS_SER_FILE = "filter_options.pkl"
         # Known models
         self.MODEL_META_SER_FILE = "model_meta.pkl"
         # Known constraints

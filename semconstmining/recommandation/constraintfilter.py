@@ -36,7 +36,8 @@ class ConstraintFilter:
 
     def filter_based_on_data_object(self, constraints):
         filtered_constraints = []
-        for _, row in constraints[~constraints[self.config.DATA_OBJECT].isna()].iterrows():
+        for _, row in constraints[~constraints[self.config.DATA_OBJECT].isna() &
+                                  (~len(constraints[self.config.DATA_OBJECT]) == 0)].iterrows():
             if any(item in self.filter_config.data_objects for item in
                    self.resource_handler.get_names_of_data_objects(ids=row[self.config.DATA_OBJECT])):
                 filtered_constraints.append(row)
@@ -44,7 +45,8 @@ class ConstraintFilter:
 
     def filter_based_on_dict_entries(self, constraints):
         filtered_constraints = []
-        for _, row in constraints[~constraints[self.config.DICTIONARY].isna()].iterrows():
+        for _, row in constraints[~constraints[self.config.DICTIONARY].isna()
+        & (~len(constraints[self.config.DICTIONARY]) == 0)].iterrows():
             if any(item in self.filter_config.dict_entries for item in
                    self.resource_handler.get_names_of_dictionary_entries(ids=row[self.config.DICTIONARY])):
                 filtered_constraints.append(row)

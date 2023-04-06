@@ -242,7 +242,7 @@ CURRENT_LOG_FILE = "semconsttest.xes"
 
 if __name__ == "__main__":
     conf = Config(Path(__file__).parents[2].resolve(), "opal")
-    filter_config = FilterConfig(conf, levels=[conf.OBJECT], arities=[conf.BINARY], data_objects=["Development Plan"])
+    filter_config = FilterConfig(conf, data_objects=["Development Plan"])
     recommender_config = RecommendationConfig(conf)
     run_full_extraction_pipeline(config=conf, process=CURRENT_LOG_FILE,
                                  filter_config=filter_config, recommender_config=recommender_config)

@@ -34,21 +34,24 @@ class ConstraintFilter:
             filtered_constraints = self.filter_based_on_labels(filtered_constraints)
         return filtered_constraints
 
+    def is_set_not_empty(self, s):
+        return not pd.isna(s) and len(s) > 0
+
     def filter_based_on_data_object(self, constraints):
         filtered_constraints = []
-        for _, row in constraints[~constraints[self.config.DATA_OBJECT].isna() &
-                                  (~len(constraints[self.config.DATA_OBJECT]) == 0)].iterrows():
-            if any(item in self.filter_config.data_objects for item in
-                   self.resource_handler.get_names_of_data_objects(ids=row[self.config.DATA_OBJECT])):
+        relevant = constraints[constraints[self.config.DATA_OBJECT].apply(self.is_set_not_empty)]
+        for _, row in relevant.iterrows():
+            names = self.resource_handler.get_names_of_data_objects(ids=row[self.config.DATA_OBJECT])
+            if any(item in self.filter_config.data_objects for item in names):
                 filtered_constraints.append(row)
         return pd.DataFrame(filtered_constraints)
 
     def filter_based_on_dict_entries(self, constraints):
         filtered_constraints = []
-        for _, row in constraints[~constraints[self.config.DICTIONARY].isna()
-        & (~len(constraints[self.config.DICTIONARY]) == 0)].iterrows():
-            if any(item in self.filter_config.dict_entries for item in
-                   self.resource_handler.get_names_of_dictionary_entries(ids=row[self.config.DICTIONARY])):
+        relevant = constraints[constraints[self.config.DICTIONARY].apply(self.is_set_not_empty)]
+        for _, row in relevant.iterrows():
+            names = self.resource_handler.get_names_of_dictionary_entries(ids=row[self.config.DICTIONARY])
+            if any(item in self.filter_config.dict_entries for item in names):
                 filtered_constraints.append(row)
         return pd.DataFrame(filtered_constraints)
 

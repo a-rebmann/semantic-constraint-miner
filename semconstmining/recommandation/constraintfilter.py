@@ -63,10 +63,7 @@ class ConstraintFilter:
         ]
 
     def filter_based_on_action_categories(self, filtered_constraints):
-        return filtered_constraints[
-            (filtered_constraints[self.config.ACTION_CATEGORY].isin(self.filter_config.action_categories) |
-                (filtered_constraints[self.config.ACTION_CATEGORY].isnull()))
-        ]
+        return filtered_constraints[filtered_constraints.apply(lambda row: self.check_action_category(row), axis=1)]
 
     def filter_based_on_objects(self, filtered_constraints):
         # TODO fix this
@@ -105,3 +102,11 @@ class ConstraintFilter:
             (filtered_constraints[self.config.LEVEL].isin(self.filter_config.levels) |
                 (filtered_constraints[self.config.LEVEL].isnull()))
         ]
+
+    def check_action_category(self, row):
+        return row[self.config.LEFT_OPERAND] in self.resource_handler.components.action_to_category and \
+            self.resource_handler.components.action_to_category[row[self.config.LEFT_OPERAND]] in self.filter_config.action_categories or \
+            row[self.config.RIGHT_OPERAND] in self.resource_handler.components.action_to_category and \
+            self.resource_handler.components.action_to_category[row[self.config.RIGHT_OPERAND]] in self.filter_config.action_categories
+
+

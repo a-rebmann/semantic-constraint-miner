@@ -59,6 +59,7 @@ class Declare:
         self.conformance_checking_results = None
         self.query_checking_results = None
         self.discovery_results = None
+        self.associated_entities = None
 
     # LOG MANAGEMENT UTILITIES
     def parse_xes_log(self, log_path: str) -> None:
@@ -402,7 +403,7 @@ class Declare:
             raise RuntimeError("Cardinality must be greater than 0.")
 
         self.discovery_results = {}
-        associated_entities = {}
+        self.associated_entities = {}
         for item_set in self.frequent_item_sets['itemsets']:
             length = len(item_set)
             if do_unary and length == 1:
@@ -432,11 +433,11 @@ class Declare:
             for trace in self.log:
                 for event in trace:
                     if event[self.config.XES_NAME] in key:
-                        if key not in associated_entities:
-                            associated_entities[key] = {self.config.DICTIONARY: set(), self.config.DATA_OBJECT: set()}
-                        associated_entities[key][self.config.DICTIONARY].update(event[self.config.DICTIONARY])
-                        associated_entities[key][self.config.DATA_OBJECT].update(event[self.config.DATA_OBJECT])
-        return self.discovery_results, associated_entities
+                        if key not in self.associated_entities:
+                            self.associated_entities[key] = {self.config.DICTIONARY: set(), self.config.DATA_OBJECT: set()}
+                        self.associated_entities[key][self.config.DICTIONARY].update(event[self.config.DICTIONARY])
+                        self.associated_entities[key][self.config.DATA_OBJECT].update(event[self.config.DATA_OBJECT])
+        return self.discovery_results, self.associated_entities
 
     def filter_discovery(self, min_support: float = 0, output_path: str = None) \
             -> dict[str: dict[tuple[int, str]: CheckerResult]]:
@@ -466,18 +467,19 @@ class Declare:
             raise RuntimeError("Min. support must be in range [0, 1].")
 
         result = {}
-
+        associated_entities = {}
         for key, val in self.discovery_results.items():
             support = len(val) / len(self.log)
             if support >= min_support:
-                result[key] = support
+                result[key] = val
+                associated_entities[key] = self.associated_entities[key]
 
         if output_path is not None:
             with open(output_path, 'w') as f:
                 f.write("activity " + "\nactivity ".join(self.get_log_alphabet_activities()) + "\n")
                 f.write('\n'.join(result.keys()))
 
-        return result
+        return result, associated_entities
 
     def query_checking(self, consider_vacuity: bool,
                        template_str: str = None, max_declare_cardinality: int = 1,

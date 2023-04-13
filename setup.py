@@ -8,7 +8,7 @@ setup(
     packages=find_packages(),
     author='Adrian Rebmann',
     author_email='rebmann@uni-mannheim.de',
-    version="0.0.17",
+    version="0.0.18",
     description="long description",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -40,5 +40,6 @@ setup(
         'mlxtend==0.21.0',
         'func-timeout==4.3.5',
         'pm4py==2.5.1',
+        'gensim==4.1.2'
     ]
 )

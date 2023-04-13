@@ -42,9 +42,9 @@ class Config:
         self.EMB_MAP = "emb_map.pkl"
 
         self.NON_TASKS = (
-        "SequenceFlow", "MessageFlow", "DataObject", "Pool", "Lane", "TextAnnotation", "Association_Undirected",
-        "Association_Bidirectional", "Association_Unidirectional", "Group", "CollapsedPool", "ITSystem",
-        "DataStore")
+            "SequenceFlow", "MessageFlow", "DataObject", "Pool", "Lane", "TextAnnotation", "Association_Undirected",
+            "Association_Bidirectional", "Association_Unidirectional", "Group", "CollapsedPool", "ITSystem",
+            "DataStore")
 
         self.BPMN2_NAMESPACE = "http://b3mn.org/stencilset/bpmn2.0#"
         self.VERB_OCEAN_FILE = "verbocean.txt"
@@ -127,7 +127,8 @@ class Config:
         self.ACTION = "action"
         self.ACTION_CATEGORY = "action_category"
         self.TAGS = "tags"
-
+        self.ACTIVATION = "activation"
+        self.TEMPLATE = "template"
 
         # DIFFERENT TYPES OF CONTEXTUAL SIMILARITIES
         self.NAME_BASED_SIM = "name_based_sim"
@@ -173,7 +174,6 @@ class Config:
             Template.EXCLUSIVE_CHOICE.templ_str: ["yes", "no"]
         }
 
-
         # REDUNDANCY RESOLUTION STRATEGIES
         # Privileges the hierarchy (eager policy): for example, if the constraint set contains AlternatePrecedence(A,
         # B) and Precedence(A, B), the latter is filtered out.
@@ -209,27 +209,490 @@ class Config:
                                for tok in obj.lower().split(" ")]
         self.SCHEMA_ORG_OBJ_PROP = [tok for obj in ['Age', 'Name', 'Type', 'Price', 'Cost'] for tok in
                                     obj.lower().split(" ")]
-        self.ACTION_CATEGORIES = {"Create": "An action is categorized as Create if it is about creating a new object.",
-                                  "Transform": "An action is categorized as Transform if it is about changing the "
+        self.ACTION_CATEGORIES = {"create": "An action is categorized as Create if it is about creating a new object.",
+                                  "transform": "An action is categorized as Transform if it is about changing the "
                                                "state of an object.",
-                                  "Move": "An action is categorized as Move if it is about moving an object from one "
+                                  "move": "An action is categorized as Move if it is about moving an object from one "
                                           "place to another.",
-                                  "Preserve": "An action is categorized as Preserve if it is about preserving an "
+                                  "preserve": "An action is categorized as Preserve if it is about preserving an "
                                               "object.",
-                                  "Destroy": "An action is categorized as Destroy if it is about destroying an object.",
-                                  "Separate": "An action is categorized as Separate if it is about separating an "
+                                  "destroy": "An action is categorized as Destroy if it is about destroying an object.",
+                                  "separate": "An action is categorized as Separate if it is about separating an "
                                               "object from another object.",
-                                  "Combine": "An action is categorized as Combine if it is about combining two objects.",
-                                  "Communicate": "An action is categorized as Communicate if it is about "
+                                  "combine": "An action is categorized as Combine if it is about combining two objects.",
+                                  "communicate": "An action is categorized as Communicate if it is about "
                                                  "communicating with an object.",
-                                  "Decide": "An action is categorized as Decide if it is about deciding about an "
+                                  "decide": "An action is categorized as Decide if it is about deciding about an "
                                             "object.",
-                                  "Assess": "An action is categorized as Assess if it is about assessing an object.",
-                                  "Manage": "An action is categorized as Manage if it is about managing an object."}
+                                  "manage": "An action is categorized as Manage if it is about managing an object."}
 
         # Language models used in the project
         self.SPACY_MODEL = "en_core_web_sm"
         self.SENTENCE_TRANSFORMER = "all-MiniLM-L6-v2"
+        self.WORD_EMBEDDINGS = "glove-wiki-gigaword-50"
 
         # Do we consider loops when mining constraints?
         self.LOOPS = True
+        self.ACTION_IDX_TO_LABEL = {0: "create",
+                                    1: "transform",
+                                    2: "move",
+                                    3: "preserve",
+                                    4: "destroy",
+                                    5: "separate",
+                                    6: "combine",
+                                    7: "communicate",
+                                    8: "decide",
+                                    9: "assess",
+                                    10: "manage"
+                                    }
+        self.mitphb = {
+            "create": [
+                {
+                    "build":
+                        []
+                },
+                {
+                    "develop":
+                        [
+                            {
+                                "document":
+                                    []
+                            },
+                            {
+                                "discuss":
+                                    []
+                            }
+                        ]
+                },
+                {
+                    "perform":
+                        [
+
+                        ]
+                },
+                {
+                    "calculate":
+                        [
+                            {
+                                "compute":
+                                    []
+                            }
+                        ]
+                },
+                {
+                    "duplicate":
+                        [
+                            {
+                                "copy":
+                                    []
+                            }
+                        ]
+                },
+                {
+                    "forecast":
+                        []
+                },
+                {
+                    "make":
+                        []
+                },
+                {
+                    "design":
+                        [
+                            {
+                                "plan": []
+                            }
+                        ]
+                },
+                {
+                    "produce":
+                        []
+                }
+            ],
+            "communicate": [
+                {
+                    "transfer":
+                        [
+                            {
+                                "inform":
+                                    []
+                            },
+                            {
+                                "communicate":
+                                    []
+                            }
+                        ]
+                },
+                {
+                    "send":
+                        [
+                            {
+                                "request":
+                                    []
+                            }
+                        ]
+                },
+                {
+                    "notify":
+                        []
+                }
+                ,
+                {
+                    "receive":
+                        []
+                }
+            ],
+            "transform": [
+                {
+                    "modify":
+                        []
+                },
+                {
+                    "edit":
+                        []
+                },
+                {
+                    "improve":
+                        [
+                            {
+                                "update":
+                                    []
+                            },
+                            {
+                                "complete":
+                                    []
+                            }
+                        ]
+                },
+                {
+                    "prepare":
+                        [
+                            {"cook": []}
+                        ]
+                },
+                {
+                    "process":
+                        [
+
+                        ]
+                },
+                {
+                    "reduce":
+                        [
+                            {"depreciate": []}
+                        ]
+                },
+                {
+                    "evolve":
+                        []
+                }
+            ],
+
+            "move":
+                [
+                    {
+                        "rotate":
+                            []
+                    },
+                    {
+                        "exchange":
+                            []
+                    },
+                    {
+                        "get":
+                            []
+                    },
+                    {
+                        "obtain":
+                            []
+                    },
+                    {
+                        "register":
+                            []
+                    },
+                    {
+                        "give":
+                            [
+
+                            ]
+                    }
+                ],
+            "preserve": [
+                {
+                    "wait":
+                        []
+                },
+                {
+                    "continue":
+                        [
+                            {
+                                "maintain":
+                                    []
+                            }
+                        ]
+                },
+                {
+                    "retain":
+                        [
+                            {
+                                "package":
+                                    []
+                            }
+                        ]
+                },
+                {
+                    "store":
+                        [
+                            {
+                                "document":
+                                    [
+                                        {
+                                            "record":
+                                                []
+                                        }
+                                    ]
+                            },
+                            {
+                                "enter":
+                                    []
+                            }
+                        ]
+                }
+            ],
+            "destroy": [
+                {
+                    "retire":
+                        [
+                            {
+                                "dispose": []
+                            },
+                            {
+                                "dissolve": []
+                            }
+                        ]
+                },
+                {
+                    "eliminate":
+                        [
+                            {
+                                "obliterate": []
+                            },
+                            {
+                                "delete": []
+                            }
+                        ]
+                }
+            ],
+            "combine": [
+                {
+                    "group":
+                        [
+                            {
+                                "organize":
+                                    []
+                            },
+                            {
+                                "match":
+                                    []
+                            },
+                            {
+                                "retrieve":
+                                    []
+                            },
+                            {
+                                "aggregate":
+                                    []
+                            },
+                            {
+                                "link":
+                                    []
+                            },
+                            {
+                                "align":
+                                    []
+                            }
+                        ]
+                },
+                {
+                    "integrate":
+                        []
+                },
+                {
+                    "connect":
+                        []
+                }
+            ],
+            "separate": [
+                {
+                    "disaggregate":
+                        [
+                            {
+                                "classify":
+                                    []
+                            }
+                        ]
+                },
+                {
+                    "divide":
+                        []
+                },
+                {
+                    "segment":
+                        [
+                            {
+                                "clarify":
+                                    []
+                            },
+                            {
+                                "diversify":
+                                    []
+                            }
+                        ]
+                },
+                {
+                    "extract":
+                        [
+                            {
+                                "filter":
+                                    []
+                            },
+                            {
+                                "distill":
+                                    []
+                            }
+                        ]
+                }
+            ],
+            "decide": [
+                {
+                    "classify":
+                        [
+                            {
+                                "sort":
+                                    []
+                            },
+                            {
+                                "score":
+                                    []
+                            },
+                            {
+                                "rank":
+                                    []
+                            }
+                        ]
+                },
+                {
+                    "select":
+                        [
+                            {
+                                "determine":
+                                    []
+                            },
+                            {
+                                "check":
+                                    []
+                            }
+                        ]
+                },
+                {
+                    "test":
+                        [
+                            {
+                                "verify":
+                                    []
+                            },
+                            {
+                                "assess":
+                                    []
+                            },
+                            {
+                                "control":
+                                    []
+                            }
+                        ]
+                },
+                {
+                    "allocate":
+                        [
+                            {
+                                "budget":
+                                    []
+                            }
+                        ]
+                },
+                {
+                    "assign":
+                        [
+                            {
+                                "match":
+                                    []
+                            },
+                            {
+                                "arrange":
+                                    []
+                            },
+                            {
+                                "schedule":
+                                    []
+                            },
+                            {
+                                "approve":
+                                    []
+                            },
+                            {
+                                "accept":
+                                    []
+                            },
+                            {
+                                "reject":
+                                    []
+                            }
+                        ]
+                }
+            ],
+            "manage": [
+                {
+                    "assign":
+                        [
+                            {
+                                "match":
+                                    []
+                            },
+                            {
+                                "arrange":
+                                    []
+                            },
+                            {
+                                "schedule":
+                                    []
+                            }
+                        ]
+                },
+                {
+                    "allocate":
+                        [
+                            {
+                                "budget":
+                                    []
+                            }
+                        ]
+                },
+                {
+                    "organize":
+                        [
+                            {
+                                "cluster":
+                                    []
+                            },
+                            {
+                                "involve":
+                                    []
+                            },
+                            {
+                                "assemble":
+                                    []
+                            }
+                        ]
+                }
+            ]
+        }

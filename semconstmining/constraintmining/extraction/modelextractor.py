@@ -6,6 +6,7 @@ from typing import List, Dict
 import pandas as pd
 import logging
 
+from semconstmining.constraintmining.extraction.declareextractor import _get_constraint_template
 from semconstmining.parsing.bert_parser import label_utils
 from semconstmining.parsing.conversion.bpmnjsonanalyzer import process_bpmn_shapes
 from semconstmining.constraintmining.model.constraint import Observation
@@ -219,7 +220,11 @@ class ModelExtractor:
                 self.config.CONSTRAINT_STR: obs[-4],
                 self.config.LEVEL: obs[-3],
                 self.config.OPERATOR_TYPE: obs[-2],
-                self.config.OBJECT: obs[-1]} for obs in observations]
+                self.config.OBJECT: obs[-1],
+                self.config.DICTIONARY: set(),
+                self.config.DATA_OBJECT: set(),
+                self.config.TEMPLATE: _get_constraint_template(obs[-4])
+                } for obs in observations]
         res = self.add_operands(res)
         return res
 

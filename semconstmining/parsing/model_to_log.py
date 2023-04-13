@@ -33,6 +33,17 @@ def _get_json_from_row(row_tuple):
     return json.loads(row_tuple.model_json)
 
 
+def create_variant_log(log):
+    variant_log = EventLog()
+    seen = set()
+    for trace in log:
+        trace_labels = tuple([x["concept:name"] for x in trace])
+        if trace_labels not in seen:
+            variant_log.append(trace)
+            seen.add(trace_labels)
+    return variant_log
+
+
 class Model2LogConverter:
 
     def __init__(self, config):
@@ -145,10 +156,11 @@ class Model2LogConverter:
             try:
                 net, im, fm = row.pn
                 log = pm4py.play_out(net, im, fm, variant=Variants.EXTENSIVE)
+                variant_log = create_variant_log(log)
                 if not self.config.LOOPS:
-                    played_out_log = create_log_without_loops(log)
+                    played_out_log = create_log_without_loops(variant_log)
                 else:
-                    played_out_log = log
+                    played_out_log = variant_log
             except Exception as ex:
                 _logger.warning(str(ex))
                 _logger.warning(ex)

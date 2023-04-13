@@ -16,6 +16,8 @@ class ConstraintFitter:
 
     def fit_constraints(self, sim_threshold=0.8):
         const_dfs = [self.fit_constraint(t, sim_threshold) for _, t in self.constraints.reset_index().iterrows()]
+        if len(const_dfs) == 0:
+            return pd.DataFrame()
         return (
             pd.concat(const_dfs).set_index(self.config.RECORD_ID)
         )

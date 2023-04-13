@@ -3,12 +3,19 @@ import uuid
 
 import pandas as pd
 from pm4py.objects.log.obj import EventLog, Trace, Event
+
+from semconstmining.declare.parsers import parse_single_constraint
 from semconstmining.parsing.conversion.petrinetanalysis import _is_relevant_label
 from semconstmining.constraintmining.model.parsed_label import get_dummy
 from semconstmining.declare.declare import Declare
 from semconstmining.parsing.resource_handler import ResourceHandler
 
 _logger = logging.getLogger(__name__)
+
+
+def _get_constraint_template(constraint):
+    return parse_single_constraint(constraint)["template"].templ_str if parse_single_constraint(constraint) is not \
+                                                                        None else None
 
 
 class DeclareExtractor:
@@ -40,7 +47,8 @@ class DeclareExtractor:
                 self.config.OPERATOR_TYPE: self.config.BINARY if any(
                     temp in const for temp in self.config.BINARY_TEMPLATES) else self.config.UNARY,
                 self.config.DICTIONARY: associations[bo][const][self.config.DICTIONARY],
-                self.config.DATA_OBJECT: associations[bo][const][self.config.DATA_OBJECT]
+                self.config.DATA_OBJECT: associations[bo][const][self.config.DATA_OBJECT],
+                self.config.TEMPLATE: _get_constraint_template(const)
                 } for bo, consts in res.items() for const in consts]
         res = self.add_operands(res)
         for rec in res:
@@ -61,7 +69,8 @@ class DeclareExtractor:
                 self.config.OPERATOR_TYPE: self.config.BINARY if any(
                     temp in const for temp in self.config.BINARY_TEMPLATES) else self.config.UNARY,
                 self.config.DICTIONARY: associations[const][self.config.DICTIONARY],
-                self.config.DATA_OBJECT: associations[const][self.config.DATA_OBJECT]
+                self.config.DATA_OBJECT: associations[const][self.config.DATA_OBJECT],
+                self.config.TEMPLATE: _get_constraint_template(const)
                 } for const in res]
         for rec in res:
             if rec[self.config.OPERATOR_TYPE] == self.config.UNARY:
@@ -79,9 +88,9 @@ class DeclareExtractor:
         :return: a pandas dataframe with extracted DECLARE constraints
         """
         _logger.info("Extracting DECLARE constraints from played-out logs")
-        # Discover regular declare constraints
-        # dfs_reg = [self.discover_declare_constraints(t) for t in
-        #             self.resource_handler.bpmn_logs.reset_index().itertuples()]
+        #Discover regular declare constraints
+        dfs_reg = [self.discover_declare_constraints(t) for t in
+                    self.resource_handler.bpmn_logs.reset_index().itertuples()]
 
         # Discover action based constraints per object
         dfs_obj = [self.discover_object_based_declare_constraints(t) for t in
@@ -92,7 +101,7 @@ class DeclareExtractor:
 
         # Combine all constraints that were extracted into a common dataframe
         dfs = [df for df in
-               #dfs_reg +  # regular declare constraints
+               dfs_reg +  # regular declare constraints
                dfs_obj +  # object based constraints
                dfs_multi_obj  # multi-object constraints
                if df is not None]
@@ -108,7 +117,8 @@ class DeclareExtractor:
         d4py = Declare(self.config)
         d4py.log = self.object_log_projection(filtered_traces)
         d4py.compute_frequent_itemsets(min_support=0.99, len_itemset=2)
-        individual_res, associations = d4py.discovery(consider_vacuity=False, max_declare_cardinality=2, do_unary=False)
+        d4py.discovery(consider_vacuity=False, max_declare_cardinality=2, do_unary=False)
+        individual_res, associations = d4py.filter_discovery(min_support=0.99)
         if any(len(y) > 0 for val in associations.values() for x in val.values() for y in x):
             #_logger.info(associations)
             pass
@@ -135,7 +145,8 @@ class DeclareExtractor:
             d4py = Declare(self.config)
             d4py.log = self.object_action_log_projection(bo, filtered_traces)
             d4py.compute_frequent_itemsets(min_support=0.99, len_itemset=2)
-            individual_res, associations = d4py.discovery(consider_vacuity=False, max_declare_cardinality=2)
+            d4py.discovery(consider_vacuity=False, max_declare_cardinality=2)
+            individual_res, associations = d4py.filter_discovery(min_support=0.99)
             # print(individual_res)
             if bo not in res:
                 res[bo] = set()
@@ -156,8 +167,9 @@ class DeclareExtractor:
         filtered_traces = self.get_filtered_traces(row_tuple.log, parsed_tasks=parsed_tasks, with_loops=True)
         d4py.log = self.clean_log_projection(filtered_traces)
         d4py.compute_frequent_itemsets(min_support=0.99, len_itemset=2)
-        res, associations = d4py.discovery(consider_vacuity=False, max_declare_cardinality=2)
-        res = {const for const, checker_results in res.items() if "[]" not in const
+        d4py.discovery(consider_vacuity=False, max_declare_cardinality=2)
+        individual_res, associations = d4py.filter_discovery(min_support=0.99)
+        res = {const for const, checker_results in individual_res.items() if "[]" not in const
                and "[none]" not in const
                and ''.join([i for i in const.split("[")[0] if not i.isdigit()]) not in self.types_to_ignore}
         return (
@@ -279,7 +291,8 @@ class DeclareExtractor:
                 self.config.OPERATOR_TYPE: self.config.BINARY if any(
                     temp in const for temp in self.config.BINARY_TEMPLATES) else self.config.UNARY,
                 self.config.DICTIONARY: associations[const][self.config.DICTIONARY],
-                self.config.DATA_OBJECT: associations[const][self.config.DATA_OBJECT]
+                self.config.DATA_OBJECT: associations[const][self.config.DATA_OBJECT],
+                self.config.TEMPLATE: _get_constraint_template(const)
                 } for const in res]
         for rec in res:
             if rec[self.config.OPERATOR_TYPE] == self.config.UNARY:

@@ -198,18 +198,20 @@ def get_context_sim_computer(config, constraints, resource_handler, min_support=
     return contextual_similarity_computer
 
 
-def recommend_constraints_for_log(config, log_name, contextual_similarity_computer):
+def recommend_constraints_for_log(config, constraints, process, contextual_similarity_computer):
     lh = LogHandler(config)
-    pd_log = lh.read_log(config.DATA_LOGS, log_name)
-    if pd_log is not None:
-        labels = list(pd_log[config.XES_NAME].unique())
-        log_info = LogInfo(contextual_similarity_computer.resource_handler.bert_parser, labels, [log_name])
-    else:
-        return pd.DataFrame()
+    pd_log = lh.read_log(config.DATA_LOGS, process)
+    if pd_log is None:
+        _logger.info("No log found for process " + process)
+        return None
+    labels = list(pd_log[config.XES_NAME].unique())
+    log_info = LogInfo(contextual_similarity_computer.resource_handler.bert_parser, labels, [process])
     recommender = ConstraintRecommender(config, contextual_similarity_computer, log_info)
-    recommended_constraints = recommender.recommend()
-    constraint_fitter = ConstraintFitter(config, log_name, recommended_constraints)
+    recommended_constraints = recommender.non_conflicting_max_relevance(constraints, recommender_config)
+    recommended_constraints = recommender.recommend(recommended_constraints, recommender_config)
+    constraint_fitter = ConstraintFitter(config, process, recommended_constraints)
     fitted_constraints = constraint_fitter.fit_constraints()
+    fitted_constraints = recommender.recommend_by_activation(fitted_constraints, recommender_config)
     return fitted_constraints
 
 
@@ -224,15 +226,8 @@ def run_full_extraction_pipeline(config: Config, process: str, filter_config: Fi
     filtered_constraints = const_filter.filter_constraints(all_constraints)
 
     # Log-specific constraint recommendation
-    lh = LogHandler(config)
-    pd_log = lh.read_log(config.DATA_LOGS, process)
-    if pd_log is None:
-        _logger.info("No log found for process " + process)
-        return None
-    labels = list(pd_log[config.XES_NAME].unique())
-    log_info = LogInfo(resource_handler.bert_parser, labels, [process])
-    recommender = ConstraintRecommender(config, contextual_similarity_computer, log_info)
-    recommended_constraints = recommender.recommend(filtered_constraints, recommender_config)
+    recommended_constraints = recommend_constraints_for_log(config, filtered_constraints, process,
+                                                            contextual_similarity_computer)
     check_constraints(config, process, recommended_constraints)
     _logger.info("Done")
 
@@ -242,7 +237,7 @@ CURRENT_LOG_FILE = "semconsttest.xes"
 
 if __name__ == "__main__":
     conf = Config(Path(__file__).parents[2].resolve(), "opal")
-    filter_config = FilterConfig(conf, data_objects=["Development Plan"])
+    filter_config = FilterConfig(conf, action_categories=["create", "communicate"])
     recommender_config = RecommendationConfig(conf)
     run_full_extraction_pipeline(config=conf, process=CURRENT_LOG_FILE,
                                  filter_config=filter_config, recommender_config=recommender_config)

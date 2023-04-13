@@ -8,4 +8,6 @@ class Components:
         self.parsed_tasks = {}
         self.all_actions = set()
         self.all_objects = set()
+        self.action_to_category = {}
+
 

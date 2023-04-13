@@ -6,6 +6,9 @@ from os.path import exists
 import pandas as pd
 from tqdm import tqdm
 import json
+import gensim.downloader as api
+
+from semconstmining.parsing.actioncalssification import ActionClassifier
 from semconstmining.parsing.bert_parser import BertTagger, label_utils
 from semconstmining.constraintmining.model.parsed_label import ParsedLabel, get_dummy
 from semconstmining.parsing import parser
@@ -40,6 +43,7 @@ class ResourceHandler:
         self.config = config
         self.data_parser = parser.BpmnModelParser(config)
         self.bert_parser = BertTagger(config)
+        self.glove_embeddings = api.load(self.config.WORD_EMBEDDINGS)
         self.model_to_log_converter = Model2LogConverter(config)
         self.elements_ser_file = config.DATA_INTERIM / (self.config.MODEL_COLLECTION + "_" + config.ELEMENTS_SER_FILE)
         self.models_ser_file = config.DATA_INTERIM / (self.config.MODEL_COLLECTION + "_" + config.MODELS_SER_FILE)
@@ -310,3 +314,9 @@ class ResourceHandler:
                 self.components.parsed_tasks[row[self.config.CLEANED_LABEL]] = parsed
             self.components.all_actions.add(parsed.main_action)
             self.components.all_objects.add(parsed.main_object)
+        self.categorize_actions()
+        _logger.info("Handled main components")
+
+    def categorize_actions(self):
+        action_classifier = ActionClassifier(self.config, self.components.all_actions, self.glove_embeddings)
+        self.components.action_to_category = action_classifier.classify_actions()

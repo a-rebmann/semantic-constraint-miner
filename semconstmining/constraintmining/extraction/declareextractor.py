@@ -285,7 +285,7 @@ class DeclareExtractor:
 
     def get_constraints_flat(self, res, associations=None):
         res = [{self.config.RECORD_ID: str(uuid.uuid4()),
-                self.config.LEVEL: self.config.DECLARE_CONST,
+                self.config.LEVEL: self.config.ACTIVITY,
                 self.config.OBJECT: "",
                 self.config.CONSTRAINT_STR: const,
                 self.config.OPERATOR_TYPE: self.config.BINARY if any(

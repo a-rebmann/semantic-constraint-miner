@@ -66,7 +66,7 @@ class ResourceHandler:
             self.filter_options = {
                 self.config.OPERATOR_TYPE: [self.config.UNARY, self.config.BINARY],
                 self.config.LEVEL: [self.config.OBJECT, self.config.MULTI_OBJECT, self.config.RESOURCE,
-                                    self.config.DECISION],
+                                    self.config.ACTIVITY],
                 self.config.DICTIONARY: self.get_names_of_dictionary_entries(),
                 self.config.DATA_OBJECT: self.get_names_of_data_objects(),
                 self.config.ACTION_CATEGORY: self.config.ACTION_CATEGORIES,
@@ -320,3 +320,7 @@ class ResourceHandler:
     def categorize_actions(self):
         action_classifier = ActionClassifier(self.config, self.components.all_actions, self.glove_embeddings)
         self.components.action_to_category = action_classifier.classify_actions()
+        for label in self.components.parsed_tasks:
+            if label not in self.components.action_to_category:
+                self.components.action_to_category[label] = \
+                    self.components.action_to_category[self.components.parsed_tasks[label].main_action]

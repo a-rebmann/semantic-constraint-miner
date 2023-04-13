@@ -135,7 +135,7 @@ class ModelExtractor:
                                         observation = (
                                             decision_left, decision_right,
                                             _create_mp_declare_const_with_decision_condition(decision_left,
-                                                                                             decision_right), self.config.DECISION,
+                                                                                             decision_right), self.config.ACTIVITY,
                                             self.config.BINARY, "")
                                         observations.append(observation)
                                         # observations[frozenset([decision_left, decision_right])] = observation

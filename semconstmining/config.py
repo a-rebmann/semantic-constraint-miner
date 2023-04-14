@@ -125,7 +125,6 @@ class Config:
         self.SOUND = "sound"
         self.LOG = "log"
         self.ACTION = "action"
-        self.ACTIVITY = "activity"
         self.ACTION_CATEGORY = "action_category"
         self.TAGS = "tags"
         self.ACTIVATION = "activation"
@@ -152,6 +151,7 @@ class Config:
         self.RESOURCE = "Resource"
         self.DECISION = "Decision"
         self.LINGUISTIC = "Linguistic"
+        self.ACTIVITY = "Activity"
 
         # LANGUAGES
         self.EN = "english"

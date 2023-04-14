@@ -88,11 +88,8 @@ class SubsumptionAnalyzer:
                                                         Template.CO_EXISTENCE.templ_str]:
 
                     reversed_const_str = _reverse_constraint(constraint)
-                    if constraint_row[self.config.LEVEL] == self.config.DECISION:
-                        reversed_const_str = reversed_const_str
                     to_mark = self.constraints[(self.constraints[self.config.CONSTRAINT_STR] == reversed_const_str) & (
                             self.constraints[self.config.OBJECT] == constraint_row[self.config.OBJECT])]
-
                     if len(to_mark) > 0:
                         if len(to_mark) > 1:
                             _logger.warning("More than one constraint matched " + reversed_const_str)

@@ -7,6 +7,7 @@ from pathlib import Path
 import pandas as pd
 from pandas import DataFrame
 
+from semconstmining.declare.ltl.declare2ltlf import to_ltl_str
 from semconstmining.log.loghandler import LogHandler
 from semconstmining.log.loginfo import LogInfo
 from semconstmining.log.logstats import LogStats
@@ -19,6 +20,7 @@ from semconstmining.constraintmining.aggregation.subsumptionanalyzer import Subs
 from semconstmining.constraintmining.model.constraint import Observation
 from semconstmining.declare.parsers.decl_parser import parse_single_constraint
 from semconstmining.declare.enums import nat_lang_templates, Template
+from semconstmining.recommandation.consistency import ConsistencyChecker
 from semconstmining.recommandation.constraintfilter import ConstraintFilter
 from semconstmining.recommandation.constraintrecommender import ConstraintRecommender
 from semconstmining.recommandation.constraintfitter import ConstraintFitter
@@ -64,6 +66,8 @@ def get_log_info(config: Config):
 
 
 def store_preprocessed(config, resource_handler, constraints, min_support, dict_filter, mark_redundant, with_nat_lang):
+    if config.LTL in constraints.columns:
+        constraints = constraints.drop(columns=[config.LTL])
     constraints.to_pickle(
         config.DATA_INTERIM / (config.MODEL_COLLECTION + "_" + "supp=" + str(min_support) +
                                "_" + "dict=" + str(dict_filter) +
@@ -73,12 +77,14 @@ def store_preprocessed(config, resource_handler, constraints, min_support, dict_
 
 
 def load_preprocessed(config, resource_handler, min_support, dict_filter, mark_redundant, with_nat_lang):
-    return pd.read_pickle(
+    consts = pd.read_pickle(
         config.DATA_INTERIM / (config.MODEL_COLLECTION + "_" + "supp=" + str(min_support) +
                                "_" + "dict=" + str(dict_filter) +
                                "_" + "redundant=" + str(mark_redundant) +
                                "_" + "nat_lang=" + str(with_nat_lang) +
                                "_" + config.PREPROCESSED_CONSTRAINTS))
+    consts[config.LTL] = consts.apply(lambda x: x[config.RECORD_ID] + " := " + to_ltl_str(x[config.CONSTRAINT_STR]) + ";", axis=1)
+    return consts
 
 
 def get_all_constraints(config, resource_handler, min_support=2, dict_filter=False,
@@ -136,6 +142,7 @@ def get_all_constraints(config, resource_handler, min_support=2, dict_filter=Fal
         constraints.reset_index(inplace=True)
         store_preprocessed(config, resource_handler, constraints, min_support, dict_filter, mark_redundant,
                            with_nat_lang)
+
     return constraints[~constraints[config.REDUNDANT]]
 
 
@@ -170,7 +177,8 @@ def get_resource_handler(config):
 
 
 CONSTRAINT_TYPES_TO_IGNORE = [Observation.RESOURCE_CONTAINMENT, Template.CHAIN_RESPONSE.templ_str,
-                              Template.CHAIN_PRECEDENCE.templ_str, Template.CHAIN_SUCCESSION.templ_str]
+                              Template.CHAIN_PRECEDENCE.templ_str, Template.CHAIN_SUCCESSION.templ_str,
+                              Template.CHOICE]
 
 
 def get_context_sim_computer(config, constraints, resource_handler, min_support=2, dict_filter=False,
@@ -228,6 +236,9 @@ def run_full_extraction_pipeline(config: Config, process: str, filter_config: Fi
     # Log-specific constraint recommendation
     recommended_constraints = recommend_constraints_for_log(config, filtered_constraints, process,
                                                             contextual_similarity_computer)
+    consistency_checker = ConsistencyChecker(config)
+    inconsistent_subsets = consistency_checker.check_consistency(recommended_constraints)
+    # TODO ask user to select correction set, or just recommend subset where least relevant correction set is removed
     check_constraints(config, process, recommended_constraints)
     _logger.info("Done")
 

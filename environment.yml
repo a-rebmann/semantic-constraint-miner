@@ -36,6 +36,8 @@ dependencies:
       - mlxtend==0.21.0
       - func-timeout==4.3.5
       - python-dotenv==1.0.0
+      - gensim==4.1.2,
+      - pylogics==0.1.1,
       # BOUNDARY
       - fastapi==0.89.1
       - uvicorn==0.20.0

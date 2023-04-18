@@ -208,14 +208,15 @@ class DeclareExtractor:
             tmp_trace = Trace()
             tmp_trace.attributes[self.config.XES_NAME] = str(i)
             for parsed in trace:
-                event = Event(
-                    {
-                        self.config.XES_NAME: parsed.label,
-                        self.config.DICTIONARY: parsed.dictionary_entries,
-                        self.config.DATA_OBJECT: parsed.data_objects,
-                    }
-                )
-                tmp_trace.append(event)
+                if parsed.label not in self.config.TERMS_FOR_MISSING:
+                    event = Event(
+                        {
+                            self.config.XES_NAME: parsed.label,
+                            self.config.DICTIONARY: parsed.dictionary_entries,
+                            self.config.DATA_OBJECT: parsed.data_objects,
+                        }
+                    )
+                    tmp_trace.append(event)
             if len(tmp_trace) > 0:
                 projection.append(tmp_trace)
         return projection

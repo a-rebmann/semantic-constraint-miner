@@ -39,6 +39,7 @@ class Template(str, Enum):
     CHAIN_SUCCESSION        = "Chain Succession",       True, False, False
     CO_EXISTENCE            = "Co-Existence",           True, False, False
 
+    NOT_CO_EXISTENCE        = "Not Co-Existence",       True, True, False
     NOT_RESPONDED_EXISTENCE = "Not Responded Existence",    True, True, False
     NOT_RESPONSE            = "Not Response",               True, True, False
     NOT_CHAIN_RESPONSE      = "Not Chain Response",         True, True, False
@@ -99,8 +100,8 @@ relation_based_on = {
     Template.NOT_PRECEDENCE.templ_str: Template.NOT_CHAIN_PRECEDENCE.templ_str,
     Template.NOT_SUCCESSION.templ_str: Template.NOT_ALTERNATE_SUCCESSION.templ_str,
     Template.NOT_ALTERNATE_SUCCESSION.templ_str: Template.NOT_CHAIN_SUCCESSION.templ_str,
-    Template.NOT_CHAIN_SUCCESSION.templ_str: None
-
+    Template.NOT_CHAIN_SUCCESSION.templ_str: None,
+    Template.NOT_CO_EXISTENCE.templ_str: None
 }
 
 opponent_constraint = {
@@ -144,6 +145,7 @@ nat_lang_templates = {
     Template.NOT_RESPONSE.templ_str: "when {1} occurs, {2} cannot not occur afterwards",
     Template.NOT_CHAIN_RESPONSE.templ_str: "when {1} occurs, {2} cannot not occur immediately afterwards",
     Template.NOT_SUCCESSION.templ_str: "{2} cannot occur after {1}",
+    Template.NOT_CO_EXISTENCE.templ_str: "if {1} occurs, then {2} cannot occur, and vice versa",
     Observation.RESOURCE_TASK_EXISTENCE.value: "{2} is performed by {1}",
     Observation.RESOURCE_CONTAINMENT.value: "{2} is part of {1}",
     "": ""
@@ -177,6 +179,7 @@ regex_representations = {
     Template.NOT_RESPONSE.templ_str: r'',
     Template.NOT_CHAIN_RESPONSE.templ_str: r'',
     Template.NOT_SUCCESSION.templ_str: r'[^a]*(a[^b]*)*[^ab]*',
+    Template.NOT_CO_EXISTENCE.templ_str: r'',
     Observation.RESOURCE_TASK_EXISTENCE.value: r'',
     Observation.RESOURCE_CONTAINMENT.value: r'',
     "": ""

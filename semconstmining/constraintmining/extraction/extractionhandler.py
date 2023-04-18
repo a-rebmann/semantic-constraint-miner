@@ -7,6 +7,7 @@ import pandas as pd
 from semconstmining.constraintmining.extraction.declareextractor import DeclareExtractor
 from semconstmining.constraintmining.extraction.modelextractor import ModelExtractor
 from semconstmining.parsing.resource_handler import ResourceHandler
+from semconstmining.declare.ltl.declare2ltlf import to_ltl
 
 _logger = logging.getLogger(__name__)
 
@@ -24,6 +25,7 @@ class ExtractionHandler:
         self.model_extractor = ModelExtractor(config, resource_handler, types_to_ignore)
         self.declare_extractor = DeclareExtractor(config, resource_handler, types_to_ignore)
 
+        # MP Constraints are not treated differently anymore
         self.mp_observations_ser_file = self.config.DATA_INTERIM / (self.config.MODEL_COLLECTION + "_" + self.config.MP_OBSERVATIONS_SER_FILE)
         self.declare_ser_file = self.config.DATA_INTERIM / (self.config.MODEL_COLLECTION + "_" + self.config.DECLARE_CONST)
         self.constraint_kb_ser_file = self.config.DATA_INTERIM / (self.config.MODEL_COLLECTION + "_" + self.config.CONSTRAINT_KB_SER_FILE)
@@ -61,6 +63,8 @@ class ExtractionHandler:
             _logger.info("Loaded stored observations.")
         else:
             df_declare = self.declare_extractor.extract_declare_from_logs()
+            df_observations_mp = self.model_extractor.get_perspectives_from_models()
+            df_declare = pd.concat([df_declare, df_observations_mp])
             _logger.info(f"{len(df_declare)} declare records extracted.")
             df_declare.to_pickle(self.declare_ser_file)
         return df_declare
@@ -69,7 +73,8 @@ class ExtractionHandler:
         kb_path = str(self.constraint_kb_ser_file).replace("constraint_", "constraint_min_support=" + str(min_support))
         if exists(kb_path):
             _logger.info("Loading stored observations.")
-            return pd.read_pickle(kb_path)
+            temp = pd.read_pickle(kb_path)
+            return temp
         temp = self.get_all_observations().copy(deep=True)
         # We determine the support of the extracted observations and remove duplicate rows
         temp[self.config.SUPPORT] = temp.groupby(self.config.CONSTRAINT_STR)[self.config.CONSTRAINT_STR].transform('count')
@@ -85,13 +90,18 @@ class ExtractionHandler:
         temp = temp.drop_duplicates(subset=[self.config.CONSTRAINT_STR, self.config.LEVEL, self.config.OBJECT])
         # We only retain constraints that have the minimum support
         temp = temp[temp[self.config.SUPPORT] > min_support]
+        for level, to_ignore in self.config.CONSTRAINT_TYPES_TO_IGNORE.items():
+            temp = temp[(temp[self.config.LEVEL] != level) |
+                        ((temp[self.config.LEVEL] == level) & (~temp[self.config.TEMPLATE].isin(to_ignore)))]
+        # translate the DECLARE constraints into LTL formulae
         temp.to_pickle(kb_path)
         return temp
 
     def get_all_observations(self):
         if not self._all_const:
-            dfs = [self.extract_declare_constraints_from_logs(),
-                   self.extract_observations_from_models()]  # , eh.extract_observations_from_logs()
-            self._all_const = pd.concat(dfs).set_index(["obs_id"])
+            #dfs = [self.extract_declare_constraints_from_logs(),
+            # self.extract_observations_from_models()]
+            # , eh.extract_observations_from_logs()
+            self._all_const = self.extract_declare_constraints_from_logs()  # pd.concat(dfs).set_index(["obs_id"])
         return self._all_const
 

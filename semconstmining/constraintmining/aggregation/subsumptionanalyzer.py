@@ -162,8 +162,22 @@ class SubsumptionAnalyzer:
                                                           new_constraints,
                                                           Template.CO_EXISTENCE)
                     continue
+
+                # Init(a) && End(a)
+                if constraint["template"].templ_str == Template.INIT.templ_str:
+                    other_const_str = _construct_constraint(constraint, Template.END)
+                    new_constraints = self._check_and_add(idx, constraint_row, constraint, other_const_str,
+                                                          new_constraints,
+                                                          Template.EXISTENCE, add=False)
+                    continue
+                if constraint["template"].templ_str == Template.END.templ_str:
+                    other_const_str = _construct_constraint(constraint, Template.INIT)
+                    new_constraints = self._check_and_add(idx, constraint_row, constraint, other_const_str,
+                                                          new_constraints,
+                                                          Template.EXISTENCE, add=False)
+                    continue
                 # Existence(a, 1) && Absence(a, 2) == Exactly(a, 1)
-                if constraint["template"].templ_str == Template.EXACTLY.templ_str:
+                if constraint["template"].templ_str == Template.EXACTLY.templ_str and False:
                     first_const_str = Template.ABSENCE.templ_str
                     first_const_str += str(int(constraint['n']) + 1)
                     first_const_str += '[' + ", ".join(constraint["activities"]) + '] |' + ' |'.join(

@@ -129,6 +129,7 @@ class Config:
         self.TAGS = "tags"
         self.ACTIVATION = "activation"
         self.TEMPLATE = "template"
+        self.LTL = "ltl"
 
         # DIFFERENT TYPES OF CONTEXTUAL SIMILARITIES
         self.NAME_BASED_SIM = "name_based_sim"
@@ -173,6 +174,15 @@ class Config:
         # Constraints that are really useless
         self.IRRELEVANT_CONSTRAINTS = {
             Template.EXCLUSIVE_CHOICE.templ_str: ["yes", "no"]
+        }
+        self.CONSTRAINT_TYPES_TO_IGNORE = {
+            self.ACTIVITY: [Template.EXACTLY.templ_str],
+            self.OBJECT: [Template.EXACTLY.templ_str],
+            self.MULTI_OBJECT: [Template.EXACTLY.templ_str, Template.EXISTENCE.templ_str, Template.ABSENCE.templ_str,
+                                Template.INIT.templ_str, Template.END.templ_str, Template.EXCLUSIVE_CHOICE.templ_str,
+                                Template.CHOICE.templ_str, Template.CHAIN_PRECEDENCE.templ_str,
+                                Template.CHAIN_RESPONSE.templ_str, Template.CHAIN_SUCCESSION.templ_str],
+            self.RESOURCE: [],
         }
 
         # REDUNDANCY RESOLUTION STRATEGIES
@@ -234,6 +244,10 @@ class Config:
 
         # Do we consider loops when mining constraints?
         self.LOOPS = True
+
+        # Server for MQI sets
+        self.MQI_SERVER = "http://141.26.82.70:3000/"
+
         self.ACTION_IDX_TO_LABEL = {0: "create",
                                     1: "transform",
                                     2: "move",
@@ -697,3 +711,4 @@ class Config:
                 }
             ]
         }
+

@@ -7,7 +7,6 @@ import pandas as pd
 from semconstmining.constraintmining.extraction.declareextractor import DeclareExtractor
 from semconstmining.constraintmining.extraction.modelextractor import ModelExtractor
 from semconstmining.parsing.resource_handler import ResourceHandler
-from semconstmining.declare.ltl.declare2ltlf import to_ltl
 
 _logger = logging.getLogger(__name__)
 
@@ -17,13 +16,12 @@ class ExtractionHandler:
     # Class for extracting observations from the model collection, which are in turn used to establish constraints
     """
 
-    def __init__(self, config,  resource_handler: ResourceHandler, types_to_ignore: List):
+    def __init__(self, config,  resource_handler: ResourceHandler):
         self.config = config
         self._all_const = None
         self.resource_handler = resource_handler
-        self.types_to_ignore = types_to_ignore
-        self.model_extractor = ModelExtractor(config, resource_handler, types_to_ignore)
-        self.declare_extractor = DeclareExtractor(config, resource_handler, types_to_ignore)
+        self.model_extractor = ModelExtractor(config, resource_handler)
+        self.declare_extractor = DeclareExtractor(config, resource_handler)
 
         # MP Constraints are not treated differently anymore
         self.mp_observations_ser_file = self.config.DATA_INTERIM / (self.config.MODEL_COLLECTION + "_" + self.config.MP_OBSERVATIONS_SER_FILE)
@@ -58,9 +56,9 @@ class ExtractionHandler:
         :return:
         """
         if exists(self.declare_ser_file):
-            _logger.info("Loading stored observations.")
+            _logger.info("Loading stored constraints.")
             df_declare = pd.read_pickle(self.declare_ser_file)
-            _logger.info("Loaded stored observations.")
+            _logger.info("Loaded stored constraints.")
         else:
             df_declare = self.declare_extractor.extract_declare_from_logs()
             df_observations_mp = self.model_extractor.get_perspectives_from_models()
@@ -90,10 +88,11 @@ class ExtractionHandler:
         temp = temp.drop_duplicates(subset=[self.config.CONSTRAINT_STR, self.config.LEVEL, self.config.OBJECT])
         # We only retain constraints that have the minimum support
         temp = temp[temp[self.config.SUPPORT] > min_support]
-        for level, to_ignore in self.config.CONSTRAINT_TYPES_TO_IGNORE.items():
+        for to_ignore in self.config.CONSTRAINT_TYPES_TO_IGNORE:
+            temp = temp[~(temp[self.config.TEMPLATE] == to_ignore)]
+        for level, to_ignore in self.config.CONSTRAINT_TEMPLATES_TO_IGNORE_PER_TYPE.items():
             temp = temp[(temp[self.config.LEVEL] != level) |
                         ((temp[self.config.LEVEL] == level) & (~temp[self.config.TEMPLATE].isin(to_ignore)))]
-        # translate the DECLARE constraints into LTL formulae
         temp.to_pickle(kb_path)
         return temp
 
@@ -102,6 +101,6 @@ class ExtractionHandler:
             #dfs = [self.extract_declare_constraints_from_logs(),
             # self.extract_observations_from_models()]
             # , eh.extract_observations_from_logs()
-            self._all_const = self.extract_declare_constraints_from_logs()  # pd.concat(dfs).set_index(["obs_id"])
+            self._all_const = self.extract_declare_constraints_from_logs().set_index(["obs_id"])  # pd.concat(dfs).set_index(["obs_id"])
         return self._all_const
 

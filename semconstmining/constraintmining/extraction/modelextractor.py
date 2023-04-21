@@ -7,7 +7,7 @@ import pandas as pd
 import logging
 
 from semconstmining.constraintmining.extraction.declareextractor import _get_constraint_template
-from semconstmining.parsing.bert_parser import label_utils
+from semconstmining.parsing.label_parser import label_utils
 from semconstmining.parsing.conversion.bpmnjsonanalyzer import process_bpmn_shapes
 from semconstmining.constraintmining.model.constraint import Observation
 from semconstmining.parsing.conversion import bpmnjsonanalyzer as bpmn_analyzer
@@ -61,7 +61,7 @@ def process_pools_and_lanes(shapes, pools, lanes):
                                                                                                       ' ').replace(
                     '\r',
                     '').replace(
-                    '  ', ' ') + ")";
+                    '  ', ' ') + ")"
             else:
                 labels[shapeID] = shape['stencil']['id']
     return follows, labels, tasks
@@ -87,10 +87,9 @@ def _create_mp_declare_const_with_decision_condition(left, right):
 
 class ModelExtractor:
 
-    def __init__(self, config, resource_handler: ResourceHandler, types_to_ignore):
+    def __init__(self, config, resource_handler: ResourceHandler):
         self.config = config
         self.resource_handler = resource_handler
-        self.types_to_ignore = [] if not types_to_ignore else types_to_ignore
 
     def _traverse_and_extract_decisions(self, follows, labels, tasks):
         choice_sets = {}
@@ -145,7 +144,7 @@ class ModelExtractor:
         return observations  # list(observations.values())
 
     def get_perspectives_from_models(self):
-        dfs = [self._get_observations_from_model(t, self.types_to_ignore)
+        dfs = [self._get_observations_from_model(t, self.config.CONSTRAINT_TYPES_TO_IGNORE)
                for t in self.resource_handler.bpmn_models.reset_index().itertuples()]
         dfs = [df for df in dfs if df is not None]
         return pd.concat(dfs).astype({self.config.LEVEL: "category"})  # .set_index([RECORD_ID])

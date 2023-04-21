@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from semconstmining.constraintmining.model.constraint import Observation
 from semconstmining.declare.enums import Template
 
 
@@ -175,7 +176,12 @@ class Config:
         self.IRRELEVANT_CONSTRAINTS = {
             Template.EXCLUSIVE_CHOICE.templ_str: ["yes", "no"]
         }
-        self.CONSTRAINT_TYPES_TO_IGNORE = {
+
+        self.CONSTRAINT_TYPES_TO_IGNORE = [Observation.RESOURCE_CONTAINMENT, Template.CHAIN_RESPONSE.templ_str,
+                                           Template.CHAIN_PRECEDENCE.templ_str, Template.CHAIN_SUCCESSION.templ_str,
+                                           Template.CHOICE.templ_str]
+
+        self.CONSTRAINT_TEMPLATES_TO_IGNORE_PER_TYPE = {
             self.ACTIVITY: [Template.EXACTLY.templ_str],
             self.OBJECT: [Template.EXACTLY.templ_str],
             self.MULTI_OBJECT: [Template.EXACTLY.templ_str, Template.EXISTENCE.templ_str, Template.ABSENCE.templ_str,
@@ -247,6 +253,14 @@ class Config:
 
         # Server for MQI sets
         self.MQI_SERVER = "http://141.26.82.70:3000/"
+        self.MQI_CONSTRAINTS = [Template.RESPONDED_EXISTENCE.templ_str, Template.CO_EXISTENCE.templ_str,
+                                Template.RESPONSE.templ_str, Template.PRECEDENCE.templ_str, Template.RESPONSE.templ_str,
+                                Template.CHAIN_RESPONSE.templ_str, Template.CHAIN_PRECEDENCE.templ_str,
+                                Template.CHAIN_SUCCESSION, Template.SUCCESSION.templ_str,
+                                Template.ALTERNATE_PRECEDENCE.templ_str,
+                                Template.ALTERNATE_RESPONSE.templ_str, Template.ALTERNATE_SUCCESSION.templ_str,
+                                Template.NOT_CO_EXISTENCE.templ_str, Template.NOT_RESPONSE.templ_str,
+                                Template.NOT_SUCCESSION.templ_str, Template.NOT_CHAIN_SUCCESSION.templ_str]
 
         self.ACTION_IDX_TO_LABEL = {0: "create",
                                     1: "transform",

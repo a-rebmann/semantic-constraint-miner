@@ -20,7 +20,9 @@ class ParsedLabel:
         self.tags = tags
         self.bos = [bo for bo in bos if bo not in config.TERMS_FOR_MISSING]
         self.bos_plain = " ".join(bo.strip() for bo in self.bos if bo not in self._stopwords).strip()
-        self.actions = actions
+        self.actions = [a.strip() for a in actions]
+        if len(self.actions) == 0:
+            self.actions = [""]
         self._act_bo_label = None
         self.main_action = self.actions[0].strip() if len(self.actions) > 0 else ""
         self.main_object = self._get_main_object()

@@ -6,10 +6,9 @@ from os.path import exists
 import pandas as pd
 from tqdm import tqdm
 import json
-import gensim.downloader as api
 
 from semconstmining.parsing.actioncalssification import ActionClassifier
-from semconstmining.parsing.bert_parser import BertTagger, label_utils
+from semconstmining.parsing.label_parser import BertTagger, label_utils
 from semconstmining.constraintmining.model.parsed_label import ParsedLabel, get_dummy
 from semconstmining.parsing import parser
 from semconstmining.parsing import detector
@@ -43,7 +42,6 @@ class ResourceHandler:
         self.config = config
         self.data_parser = parser.BpmnModelParser(config)
         self.bert_parser = BertTagger(config)
-        self.glove_embeddings = api.load(self.config.WORD_EMBEDDINGS)
         self.model_to_log_converter = Model2LogConverter(config)
         self.elements_ser_file = config.DATA_INTERIM / (self.config.MODEL_COLLECTION + "_" + config.ELEMENTS_SER_FILE)
         self.models_ser_file = config.DATA_INTERIM / (self.config.MODEL_COLLECTION + "_" + config.MODELS_SER_FILE)
@@ -318,7 +316,8 @@ class ResourceHandler:
         _logger.info("Handled main components")
 
     def categorize_actions(self):
-        action_classifier = ActionClassifier(self.config, self.components.all_actions, self.glove_embeddings)
+        action_classifier = ActionClassifier(self.config, self.components.all_actions,
+                                             self.bert_parser.label_util.glove_embeddings)
         self.components.action_to_category = action_classifier.classify_actions()
         for label in self.components.parsed_tasks:
             if label not in self.components.action_to_category:

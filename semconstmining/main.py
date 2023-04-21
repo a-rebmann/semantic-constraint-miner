@@ -7,7 +7,6 @@ from pathlib import Path
 import pandas as pd
 from pandas import DataFrame
 
-from semconstmining.declare.ltl.declare2ltlf import to_ltl_str
 from semconstmining.log.loghandler import LogHandler
 from semconstmining.log.loginfo import LogInfo
 from semconstmining.log.logstats import LogStats
@@ -17,9 +16,9 @@ from semconstmining.constraintmining.aggregation.contextualsimcomputer import Co
     write_pickle
 from semconstmining.constraintmining.aggregation.dictionaryfilter import DictionaryFilter
 from semconstmining.constraintmining.aggregation.subsumptionanalyzer import SubsumptionAnalyzer
-from semconstmining.constraintmining.model.constraint import Observation
+from semconstmining.declare.ltl.declare2ltlf import to_ltl_str
 from semconstmining.declare.parsers.decl_parser import parse_single_constraint
-from semconstmining.declare.enums import nat_lang_templates, Template
+from semconstmining.declare.enums import nat_lang_templates
 from semconstmining.recommandation.consistency import ConsistencyChecker
 from semconstmining.recommandation.constraintfilter import ConstraintFilter
 from semconstmining.recommandation.constraintrecommender import ConstraintRecommender
@@ -65,9 +64,7 @@ def get_log_info(config: Config):
     return list(log_infos.values())
 
 
-def store_preprocessed(config, resource_handler, constraints, min_support, dict_filter, mark_redundant, with_nat_lang):
-    if config.LTL in constraints.columns:
-        constraints = constraints.drop(columns=[config.LTL])
+def store_preprocessed(config, constraints, min_support, dict_filter, mark_redundant, with_nat_lang):
     constraints.to_pickle(
         config.DATA_INTERIM / (config.MODEL_COLLECTION + "_" + "supp=" + str(min_support) +
                                "_" + "dict=" + str(dict_filter) +
@@ -76,14 +73,13 @@ def store_preprocessed(config, resource_handler, constraints, min_support, dict_
                                "_" + config.PREPROCESSED_CONSTRAINTS))
 
 
-def load_preprocessed(config, resource_handler, min_support, dict_filter, mark_redundant, with_nat_lang):
+def load_preprocessed(config, min_support, dict_filter, mark_redundant, with_nat_lang):
     consts = pd.read_pickle(
         config.DATA_INTERIM / (config.MODEL_COLLECTION + "_" + "supp=" + str(min_support) +
                                "_" + "dict=" + str(dict_filter) +
                                "_" + "redundant=" + str(mark_redundant) +
                                "_" + "nat_lang=" + str(with_nat_lang) +
                                "_" + config.PREPROCESSED_CONSTRAINTS))
-    consts[config.LTL] = consts.apply(lambda x: x[config.RECORD_ID] + " := " + to_ltl_str(x[config.CONSTRAINT_STR]) + ";", axis=1)
     return consts
 
 
@@ -109,15 +105,14 @@ def get_all_constraints(config, resource_handler, min_support=2, dict_filter=Fal
     """
     # TODO this main getter should have a smarter way of managing its parameters
 
-    eh = ExtractionHandler(config, resource_handler, types_to_ignore=CONSTRAINT_TYPES_TO_IGNORE)
+    eh = ExtractionHandler(config, resource_handler)
 
     if exists(config.DATA_INTERIM / (config.MODEL_COLLECTION + "_" + "supp=" + str(min_support) +
                                      "_" + "dict=" + str(dict_filter) +
                                      "_" + "redundant=" + str(mark_redundant) +
                                      "_" + "nat_lang=" + str(with_nat_lang) +
                                      "_" + config.PREPROCESSED_CONSTRAINTS)):
-        constraints = load_preprocessed(config, resource_handler, min_support, dict_filter, mark_redundant,
-                                        with_nat_lang)
+        constraints = load_preprocessed(config, min_support, dict_filter, mark_redundant, with_nat_lang)
     else:
         if min_support > 1:
             constraints = eh.aggregate_constraints(min_support=min_support)
@@ -127,6 +122,7 @@ def get_all_constraints(config, resource_handler, min_support=2, dict_filter=Fal
             dict_fil = DictionaryFilter(config, constraints)
             dict_fil.mark_natural_language_objects()
             constraints = dict_fil.filter_with_proprietary_dict(prop_dict={})
+        #constraints = constraints[constraints[config.LEVEL] != config.ACTIVITY]
         if mark_redundant:
             # We analyze the extracted constraints with respect to their hierarchy,
             # we then keep stronger constraints with the same support as weaker ones, which we remove
@@ -134,14 +130,17 @@ def get_all_constraints(config, resource_handler, min_support=2, dict_filter=Fal
             subsumption_analyzer.check_refinement()
             subsumption_analyzer.check_subsumption()
             subsumption_analyzer.check_equal()
+            # translate the DECLARE constraints into LTL formulae
+        constraints.reset_index(inplace=True)
+        constraints[config.LTL] = constraints.apply(
+            lambda x: x[config.RECORD_ID] + " := " + to_ltl_str(x[config.CONSTRAINT_STR]) + ";", axis=1)
         if with_nat_lang:
             constraints[config.NAT_LANG_TEMPLATE] = constraints[config.CONSTRAINT_STR].apply(
                 lambda x: nat_lang_templates[
                     parse_single_constraint(x)["template"].templ_str if parse_single_constraint(x) is not None else
                     x.split("[")[0]])
-        constraints.reset_index(inplace=True)
-        store_preprocessed(config, resource_handler, constraints, min_support, dict_filter, mark_redundant,
-                           with_nat_lang)
+
+        store_preprocessed(config, constraints, min_support, dict_filter, mark_redundant, with_nat_lang)
 
     return constraints[~constraints[config.REDUNDANT]]
 
@@ -176,11 +175,6 @@ def get_resource_handler(config):
     return resource_handler
 
 
-CONSTRAINT_TYPES_TO_IGNORE = [Observation.RESOURCE_CONTAINMENT, Template.CHAIN_RESPONSE.templ_str,
-                              Template.CHAIN_PRECEDENCE.templ_str, Template.CHAIN_SUCCESSION.templ_str,
-                              Template.CHOICE]
-
-
 def get_context_sim_computer(config, constraints, resource_handler, min_support=2, dict_filter=False,
                              mark_redundant=True,
                              with_nat_lang=True):
@@ -201,8 +195,7 @@ def get_context_sim_computer(config, constraints, resource_handler, min_support=
     contextual_similarity_computer.compute_object_based_contextual_dissimilarity()
     contextual_similarity_computer.compute_label_based_contextual_dissimilarity()
     contextual_similarity_computer.compute_name_based_contextual_dissimilarity()
-    store_preprocessed(config, contextual_similarity_computer.resource_handler, constraints,
-                       min_support, dict_filter, mark_redundant, with_nat_lang)
+    store_preprocessed(config, constraints, min_support, dict_filter, mark_redundant, with_nat_lang)
     return contextual_similarity_computer
 
 
@@ -215,8 +208,8 @@ def recommend_constraints_for_log(config, constraints, process, contextual_simil
     labels = list(pd_log[config.XES_NAME].unique())
     log_info = LogInfo(contextual_similarity_computer.resource_handler.bert_parser, labels, [process])
     recommender = ConstraintRecommender(config, contextual_similarity_computer, log_info)
-    recommended_constraints = recommender.non_conflicting_max_relevance(constraints, recommender_config)
-    recommended_constraints = recommender.recommend(recommended_constraints, recommender_config)
+    # recommended_constraints = recommender.non_conflicting_max_relevance(constraints, recommender_config)
+    recommended_constraints = recommender.recommend(constraints, recommender_config)
     constraint_fitter = ConstraintFitter(config, process, recommended_constraints)
     fitted_constraints = constraint_fitter.fit_constraints()
     fitted_constraints = recommender.recommend_by_activation(fitted_constraints, recommender_config)
@@ -248,7 +241,7 @@ CURRENT_LOG_FILE = "semconsttest.xes"
 
 if __name__ == "__main__":
     conf = Config(Path(__file__).parents[2].resolve(), "opal")
-    filter_config = FilterConfig(conf, action_categories=["create", "communicate"])
+    filter_config = FilterConfig(conf)
     recommender_config = RecommendationConfig(conf)
     run_full_extraction_pipeline(config=conf, process=CURRENT_LOG_FILE,
                                  filter_config=filter_config, recommender_config=recommender_config)

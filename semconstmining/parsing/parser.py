@@ -120,7 +120,12 @@ class BpmnModelParser:
         Parses the recursive childShapes and produces a flat list of model elements with the most important attributes
         such as id, category, label, outgoing, and parent elements.
         """
-        f, l, _ = fromJSON(model_dict)
+        elements_flat = []
+        try:
+            f, l, _ = fromJSON(model_dict)
+        except KeyError as e:
+            _logger.warning("Could not parse model %s, skipping", model_id)
+            return elements_flat
         follows = {}
         labels = {}
         for e in l:
@@ -128,7 +133,6 @@ class BpmnModelParser:
         for e in f:
             follows[model_id+str(e)] = [model_id+str(e) for e in f[e]]
         stack = deque([model_dict])
-        elements_flat = []
         data_object_relations = _traverse_and_extract_data_object_relations(follows, labels)
         while len(stack) > 0:
             element = stack.pop()

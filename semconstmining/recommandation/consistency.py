@@ -15,8 +15,11 @@ class ConsistencyChecker:
         :return: the inconsistent constraint sets
         """
         mqi_sets = []
-        constraints = constraint_selection[self.config.CONSTRAINT_STR].values.tolist()
-        constraints = [c.replace(" ", "") for c in constraints if c is not None]
+        const_str = set(constraint_selection.apply(
+            lambda row: self.preprocess_str(row), axis=1).values.tolist())
+        print(const_str)
+        constraints = [c.replace(" ", "") for c in const_str if c is not None
+                       and c not in self.config.TERMS_FOR_MISSING]
         # TODO which templates are supported?
         # TODO enclose operands in quotes
         constraints_str = " ".join(constraints).replace("|", "").replace("[", "(").replace("]", ")")
@@ -36,3 +39,12 @@ class ConsistencyChecker:
         for mqi_set in mqi_sets:
             constraint_ids.append([constraint_selection[self.config.RECORD_ID].values.tolist()[i] for i in mqi_set])
         return constraint_ids
+
+    def preprocess_str(self, row):
+        res = row[self.config.CONSTRAINT_STR]
+        if row[self.config.TEMPLATE] in self.config.MQI_CONSTRAINTS:
+            res = res.replace(row[self.config.LEFT_OPERAND], "'" + row[self.config.LEFT_OPERAND] + "'")
+            res = res.replace(row[self.config.RIGHT_OPERAND], "'" + row[self.config.RIGHT_OPERAND] + "'")
+            return res
+        else:
+            return None

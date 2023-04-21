@@ -1,7 +1,7 @@
-from semconstmining.parsing.bert_parser.label_utils import LabelUtil, split_label
+from semconstmining.parsing.label_parser.label_utils import LabelUtil, split_label
 from semconstmining.constraintmining.model.parsed_label import ParsedLabel
-from semconstmining.parsing.bert_parser.bert_wrapper import BertWrapper
-from semconstmining.parsing.bert_parser.bert_for_label_parsing import BertForLabelParsing
+from semconstmining.parsing.label_parser.bert_wrapper import BertWrapper
+from semconstmining.parsing.label_parser.bert_for_label_parsing import BertForLabelParsing
 
 
 class BertTagger:
@@ -60,7 +60,7 @@ class BertTagger:
         return [tok for tok, bo in zip(split, tags) if bo == 'REC']
 
     def find_actions(self, split, tags, lemmatize=False):
-        return [self.label_util.lemmatize_word(tok) if lemmatize else
+        return [self.label_util.transform_action_w2v(tok) if lemmatize else
                 tok for tok, a in zip(split, tags) if a in ['A', 'ASTATE', 'BOSTATE']]
 
 

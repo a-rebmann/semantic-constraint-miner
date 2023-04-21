@@ -136,8 +136,14 @@ class Model2LogConverter:
                 labels.append(labels_)
                 pns.append((net, initial_marking, final_marking))
                 success += 1
-            except Exception:
+            except KeyError:
                 _logger.debug("Error during conversion from bpmn to Petri net.")
+                pns.append(None)
+                follows.append(None)
+                labels.append(None)
+                failed += 1
+            except Exception as ex:
+                _logger.debug("Error during conversion from bpmn to Petri net." + str(ex))
                 pns.append(None)
                 follows.append(None)
                 labels.append(None)

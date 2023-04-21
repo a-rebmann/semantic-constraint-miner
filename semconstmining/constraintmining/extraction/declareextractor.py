@@ -20,11 +20,9 @@ def _get_constraint_template(constraint):
 
 class DeclareExtractor:
 
-    def __init__(self, config, resource_handler: ResourceHandler, types_to_ignore=None):
+    def __init__(self, config, resource_handler: ResourceHandler):
         self.config = config
         self.resource_handler = resource_handler
-        self.types_to_ignore = [] if types_to_ignore is None else types_to_ignore
-        _logger.info("Will ignore: " + str(self.types_to_ignore))
 
     def add_operands(self, res):
         for rec in res:
@@ -124,7 +122,8 @@ class DeclareExtractor:
             pass
         res.update(const for const, checker_results in individual_res.items()
                    if "[]" not in const and "[none]" not in const
-                   and ''.join([i for i in const.split("[")[0] if not i.isdigit()]) not in self.types_to_ignore)
+                   and ''.join([i for i in const.split("[")[0] if not i.isdigit()]) not in
+                   self.config.CONSTRAINT_TYPES_TO_IGNORE)
         return (
             pd.DataFrame.from_records(self.get_multi_object_constraints_flat(res, associations)).assign(
                 model_id=row_tuple.model_id).assign(
@@ -152,7 +151,7 @@ class DeclareExtractor:
                 res[bo] = set()
             res[bo].update(const for const, checker_results in individual_res.items() if "[]" not in const
                            and "[none]" not in const
-                           and ''.join([i for i in const.split("[")[0] if not i.isdigit()]) not in self.types_to_ignore)
+                           and ''.join([i for i in const.split("[")[0] if not i.isdigit()]) not in self.config.CONSTRAINT_TYPES_TO_IGNORE)
             all_associations[bo] = associations
         return (
             pd.DataFrame.from_records(self.get_object_constraints_flat(res, all_associations)).assign(model_id=row_tuple.model_id).assign(
@@ -171,7 +170,7 @@ class DeclareExtractor:
         individual_res, associations = d4py.filter_discovery(min_support=0.99)
         res = {const for const, checker_results in individual_res.items() if "[]" not in const
                and "[none]" not in const
-               and ''.join([i for i in const.split("[")[0] if not i.isdigit()]) not in self.types_to_ignore}
+               and ''.join([i for i in const.split("[")[0] if not i.isdigit()]) not in self.config.CONSTRAINT_TYPES_TO_IGNORE}
         return (
             pd.DataFrame.from_records(self.get_constraints_flat(res, associations)).assign(model_id=row_tuple.model_id).assign(
                 model_name=row_tuple.name)

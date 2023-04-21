@@ -14,7 +14,7 @@ class ConstraintFitter:
         self.log_info = log_info
         self.constraints = constraints
 
-    def fit_constraints(self, sim_threshold=0.8):
+    def fit_constraints(self, sim_threshold=0.0):
         const_dfs = [self.fit_constraint(t, sim_threshold) for _, t in self.constraints.reset_index().iterrows()]
         if len(const_dfs) == 0:
             return pd.DataFrame()
@@ -22,7 +22,9 @@ class ConstraintFitter:
             pd.concat(const_dfs).set_index(self.config.RECORD_ID)
         )
 
-    def fit_constraint(self, row, sim_threshold=0.8):
+    #  TODO: This is a very ugly method. Refactor it.
+    #  TODO: This only considers object-based log-constraint similarity. Add support for other types of similarity.
+    def fit_constraint(self, row, sim_threshold):
         fitted_constraints = []
         if len(row[self.config.OBJECT_BASED_SIM_EXTERNAL]) == 1:
             obj_sim = row[self.config.OBJECT_BASED_SIM_EXTERNAL][self.config.OBJECT]

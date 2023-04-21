@@ -36,44 +36,50 @@ def _reverse_constraint(constraint):
 
 class SubsumptionAnalyzer:
 
-    def __init__(self, config, constraints: DataFrame, types_to_ignore=None):
+    def __init__(self, config, constraints: DataFrame):
         self.config = config
-        self.types_to_ignore = [] if types_to_ignore is None else types_to_ignore
         self.constraints = constraints
         self.constraints[self.config.REDUNDANT] = False
 
     def check_subsumption(self):
         # First, we get all possible operands (activities, objects, actions)
-        all_operands = set()
-        all_operands.update(self.constraints[self.config.LEFT_OPERAND].dropna().unique())
-        all_operands.update(self.constraints[self.config.RIGHT_OPERAND].dropna().unique())
-        for operand in all_operands:
+        #all_operands = set()
+        #all_operands.update(self.constraints[self.config.LEFT_OPERAND].dropna().unique())
+        #all_operands.update(self.constraints[self.config.RIGHT_OPERAND].dropna().unique())
+        #for operand in all_operands:
+
             # get all constraints that involve the current operand
-            constraints = self.constraints[
-                (self.constraints[self.config.LEFT_OPERAND] == operand)]  # | (self.constraints[RIGHT_OPERAND] == operand)
-            for constraint_tuple in constraints.itertuples():
-                constraint = parse_single_constraint(constraint_tuple.constraint_string)
-                if constraint is None:
-                    continue
-                # for every constraint, check subsumption
-                if self.config.POLICY == self.config.EAGER_ON_SUPPORT_OVER_HIERARCHY:
-                    tmp = constraint["template"]
-                    # check if there is a higher-level constraint
-                    while tmp.templ_str in relation_based_on and relation_based_on[tmp.templ_str] is not None:
-                        tmp_str = relation_based_on[tmp.templ_str]
-                        constraint_str = tmp_str
-                        if constraint['template'].supports_cardinality:
-                            constraint_str += str(constraint['n'])
-                        constraint_str += '[' + ", ".join(constraint["activities"]) + '] |' + ' |'.join(
-                            constraint["condition"])
-                        to_mark = constraints[(constraints[self.config.CONSTRAINT_STR] == constraint_str) & (
-                                constraints[self.config.OBJECT] == constraint_tuple.Object)]
-                        for i, row in to_mark.iterrows():
-                            # check if the support of the higher-level constraint is the same and if so,
-                            # mark that one as redundant!
-                            if row[self.config.SUPPORT] == constraint_tuple.support:
-                                self.constraints.at[i, self.config.REDUNDANT] = True
-                        tmp = Template.get_template_from_string(tmp_str)
+
+        constraints = self.constraints[(~self.constraints[
+                 self.config.REDUNDANT])]  # | (self.constraints[RIGHT_OPERAND] == operand)
+        non_red_const = len(constraints)
+        counter = 0
+        for constraint_tuple in constraints.itertuples():
+            constraint = parse_single_constraint(constraint_tuple.constraint_string)
+            counter += 1
+            if constraint is None:
+                continue
+            # for every constraint, check subsumption
+            if self.config.POLICY == self.config.EAGER_ON_SUPPORT_OVER_HIERARCHY:
+                tmp = constraint["template"]
+                # check if there is a higher-level constraint
+                while tmp.templ_str in relation_based_on and relation_based_on[tmp.templ_str] is not None:
+                    tmp_str = relation_based_on[tmp.templ_str]
+                    constraint_str = tmp_str
+                    if constraint['template'].supports_cardinality:
+                        constraint_str += str(constraint['n'])
+                    constraint_str += '[' + ", ".join(constraint["activities"]) + '] |' + ' |'.join(
+                        constraint["condition"])
+                    to_mark = constraints[(constraints[self.config.CONSTRAINT_STR] == constraint_str) & (
+                            constraints[self.config.OBJECT] == constraint_tuple.Object) & (
+                                                  self.constraints[self.config.LEVEL] == constraint_tuple.Level)]
+                    for i, row in to_mark.iterrows():
+                        # check if the support of the higher-level constraint is the same and if so,
+                        # mark that one as redundant!
+                        if row[self.config.SUPPORT] == constraint_tuple.support:
+                            self.constraints.at[i, self.config.REDUNDANT] = True
+                    tmp = Template.get_template_from_string(tmp_str)
+            #print("Checked " + str(counter) + " of " + str(non_red_const) + " constraints.")
 
     def check_equal(self):
         """
@@ -89,13 +95,16 @@ class SubsumptionAnalyzer:
 
                     reversed_const_str = _reverse_constraint(constraint)
                     to_mark = self.constraints[(self.constraints[self.config.CONSTRAINT_STR] == reversed_const_str) & (
-                            self.constraints[self.config.OBJECT] == constraint_row[self.config.OBJECT])]
+                            self.constraints[self.config.OBJECT] == constraint_row[self.config.OBJECT]) & (
+                                                       self.constraints[self.config.LEVEL] == constraint_row[
+                                                   self.config.LEVEL])]
                     if len(to_mark) > 0:
                         if len(to_mark) > 1:
                             _logger.warning("More than one constraint matched " + reversed_const_str)
                         for i, row in to_mark.iterrows():
                             if row[self.config.SUPPORT] == constraint_row[self.config.SUPPORT]:
-                                self.constraints.at[i, self.config.REDUNDANT] = True  # sets the reverse constraint as redundant
+                                self.constraints.at[
+                                    i, self.config.REDUNDANT] = True  # sets the reverse constraint as redundant
                                 done.add(i)
 
     def check_refinement(self):
@@ -168,16 +177,16 @@ class SubsumptionAnalyzer:
                     other_const_str = _construct_constraint(constraint, Template.END)
                     new_constraints = self._check_and_add(idx, constraint_row, constraint, other_const_str,
                                                           new_constraints,
-                                                          Template.EXISTENCE, add=False)
+                                                          Template.EXISTENCE, add_const=False)
                     continue
                 if constraint["template"].templ_str == Template.END.templ_str:
                     other_const_str = _construct_constraint(constraint, Template.INIT)
                     new_constraints = self._check_and_add(idx, constraint_row, constraint, other_const_str,
                                                           new_constraints,
-                                                          Template.EXISTENCE, add=False)
+                                                          Template.EXISTENCE, add_const=False)
                     continue
                 # Existence(a, 1) && Absence(a, 2) == Exactly(a, 1)
-                if constraint["template"].templ_str == Template.EXACTLY.templ_str and False:
+                if constraint["template"].templ_str == Template.EXACTLY.templ_str:
                     first_const_str = Template.ABSENCE.templ_str
                     first_const_str += str(int(constraint['n']) + 1)
                     first_const_str += '[' + ", ".join(constraint["activities"]) + '] |' + ' |'.join(
@@ -186,24 +195,24 @@ class SubsumptionAnalyzer:
                     second_const_str += str(constraint['n'])
                     second_const_str += '[' + ", ".join(constraint["activities"]) + '] |' + ' |'.join(
                         constraint["condition"])
-                    self._check_and_add(idx, constraint_row, constraint, first_const_str,
+                    new_constraints = self._check_and_add(idx, constraint_row, constraint, first_const_str,
                                                           new_constraints,
-                                                          Template.EXACTLY, add=False)
-                    self._check_and_add(idx, constraint_row, constraint, second_const_str,
+                                                          Template.EXACTLY, add_const=False)
+                    new_constraints = self._check_and_add(idx, constraint_row, constraint, second_const_str,
                                                           new_constraints,
-                                                          Template.EXACTLY, add=False)
+                                                          Template.EXACTLY, add_const=False)
                     continue
 
-
         # merge the new constraints into the existing ones
-        self.constraints = pd.concat([self.constraints.reset_index(), new_constraints])
+        print("New constraints: " + str(len(new_constraints)))
+
+        self.constraints = pd.concat([self.constraints.reset_index(), new_constraints]).set_index(["obs_id"])
 
     def _check_and_add(self, constraint_row_idx, constraint_row, constraint, other_const_str, new_constraints,
-                       template, add=True):
-        if template.templ_str in self.types_to_ignore:
-            return new_constraints
+                       template, add_const=True):
         to_mark = self.constraints[(self.constraints[self.config.CONSTRAINT_STR] == other_const_str) & (
-                self.constraints[self.config.OBJECT] == constraint_row[self.config.OBJECT])]
+                self.constraints[self.config.OBJECT] == constraint_row[self.config.OBJECT]) & (
+                                           self.constraints[self.config.LEVEL] == constraint_row[self.config.LEVEL])]
         if len(to_mark) > 0:
             row_copy = deepcopy(constraint_row)
             if len(to_mark) > 1:
@@ -213,13 +222,35 @@ class SubsumptionAnalyzer:
                 # mark both as redundant and add to new one!
                 if row[self.config.SUPPORT] == constraint_row[self.config.SUPPORT]:
                     self.constraints.at[i, self.config.REDUNDANT] = True  # sets the opponent constraint as redundant
-                    if add:
+                    if add_const:
                         self.constraints.at[
                             constraint_row_idx, self.config.REDUNDANT] = True  # sets the current constraint as redundant
                         new_const_str = _construct_constraint(constraint, template)
                         row_copy[self.config.CONSTRAINT_STR] = new_const_str
                         row_copy[self.config.RECORD_ID] = str(uuid.uuid4())
                         return new_constraints.append(row_copy, ignore_index=True)
-                    else:
-                        return new_constraints
         return new_constraints
+
+    # def _check_and_add(self, constraint_row_idx, constraint_row, constraint, other_const_str, new_constraints,
+    #                    template):
+    #     # if template.templ_str in self.config.CONSTRAINT_TYPES_TO_IGNORE:
+    #     #     return new_constraints
+    #     to_mark = self.constraints[(self.constraints[self.config.CONSTRAINT_STR] == other_const_str) & (
+    #             self.constraints[self.config.OBJECT] == constraint_row[self.config.OBJECT])
+    #                                & (self.constraints[self.config.LEVEL] == constraint_row[self.config.LEVEL])]
+    #     if len(to_mark) > 0:
+    #         row_copy = deepcopy(constraint_row)
+    #         if len(to_mark) > 1:
+    #             _logger.warning("More than one constraint matched " + other_const_str)
+    #         for i, row in to_mark.iterrows():
+    #             # check if the support of the higher-level constraint is the same and if so,
+    #             # mark both as redundant and add to new one!
+    #             if row[self.config.SUPPORT] == constraint_row[self.config.SUPPORT]:
+    #                 self.constraints.at[i, self.config.REDUNDANT] = True  # sets the opponent constraint as redundant
+    #                 self.constraints.at[constraint_row_idx, self.config.REDUNDANT] = True  # sets the current constraint as redundant
+    #                 new_const_str = _construct_constraint(constraint, template)
+    #                 row_copy[self.config.CONSTRAINT_STR] = new_const_str
+    #                 row_copy[self.config.RECORD_ID] = str(uuid.uuid4())
+    #                 new_constraints.append(row_copy, ignore_index=True)
+    #                 return new_constraints
+    #     return new_constraints

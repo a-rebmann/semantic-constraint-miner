@@ -8,7 +8,7 @@ setup(
     packages=find_packages(),
     author='Adrian Rebmann',
     author_email='rebmann@uni-mannheim.de',
-    version="0.1.0",
+    version="0.1.1",
     description="long description",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -42,5 +42,6 @@ setup(
         'pm4py==2.5.1',
         'gensim==4.1.2',
         "pylogics==0.1.1",
+        "inflect==6.0.4",
     ]
 )

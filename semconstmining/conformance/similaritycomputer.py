@@ -1,7 +1,7 @@
 from enum import Enum
 from nltk.corpus import wordnet
 from itertools import chain
-from semconstmining.parsing.bert_parser import label_utils
+from semconstmining.parsing.label_parser import label_utils
 
 
 class SimMode(Enum):

@@ -1,6 +1,6 @@
 import pandas as pd
-from semconstmining.parsing.bert_parser import BertTagger
-from semconstmining.parsing.bert_parser.label_utils import sanitize_label
+from semconstmining.parsing.label_parser import BertTagger
+from semconstmining.parsing.label_parser.label_utils import sanitize_label
 
 
 class LogInfo:

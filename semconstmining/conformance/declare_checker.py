@@ -1,7 +1,7 @@
 from pandas import DataFrame
 from pm4py.objects.log.obj import EventLog, Trace, Event
 
-from semconstmining.parsing.bert_parser import BertTagger
+from semconstmining.parsing.label_parser import BertTagger
 from semconstmining.parsing.conversion.petrinetanalysis import _is_relevant_label
 from semconstmining.constraintmining.model.parsed_label import get_dummy
 from semconstmining.declare.declare import Declare

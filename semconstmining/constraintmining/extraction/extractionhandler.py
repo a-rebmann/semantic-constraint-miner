@@ -88,11 +88,6 @@ class ExtractionHandler:
         temp = temp.drop_duplicates(subset=[self.config.CONSTRAINT_STR, self.config.LEVEL, self.config.OBJECT])
         # We only retain constraints that have the minimum support
         temp = temp[temp[self.config.SUPPORT] > min_support]
-        for to_ignore in self.config.CONSTRAINT_TYPES_TO_IGNORE:
-            temp = temp[~(temp[self.config.TEMPLATE] == to_ignore)]
-        for level, to_ignore in self.config.CONSTRAINT_TEMPLATES_TO_IGNORE_PER_TYPE.items():
-            temp = temp[(temp[self.config.LEVEL] != level) |
-                        ((temp[self.config.LEVEL] == level) & (~temp[self.config.TEMPLATE].isin(to_ignore)))]
         temp.to_pickle(kb_path)
         return temp
 

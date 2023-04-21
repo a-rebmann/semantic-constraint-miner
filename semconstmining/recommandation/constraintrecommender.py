@@ -144,6 +144,9 @@ class ConstraintRecommender:
                                                    sim_thresh=recommender_config.label_external_thresh)
         return constraints
 
+
+
+
     def non_conflicting_max_relevance(self, constraints, recommender_config: RecommendationConfig):
         return constraints
 

@@ -171,6 +171,8 @@ class Config:
         self.UNARY_TEMPLATES = [un_temp.templ_str for un_temp in Template.get_unary_templates()]
         # All cardinality constraint templates
         self.CARDINALITY_TEMPLATES = [un_temp.templ_str for un_temp in Template.get_cardinality_templates()]
+        # All negative constraint templates
+        self.NEGATIVE_TEMPLATES = [un_temp.templ_str for un_temp in Template.get_negative_templates()]
 
         # Constraints that are really useless
         self.IRRELEVANT_CONSTRAINTS = {
@@ -179,7 +181,7 @@ class Config:
 
         self.CONSTRAINT_TYPES_TO_IGNORE = [Observation.RESOURCE_CONTAINMENT, Template.CHAIN_RESPONSE.templ_str,
                                            Template.CHAIN_PRECEDENCE.templ_str, Template.CHAIN_SUCCESSION.templ_str,
-                                           Template.CHOICE.templ_str]
+                                           Template.CHOICE.templ_str] + self.NEGATIVE_TEMPLATES
 
         self.CONSTRAINT_TEMPLATES_TO_IGNORE_PER_TYPE = {
             self.ACTIVITY: [Template.EXACTLY.templ_str],

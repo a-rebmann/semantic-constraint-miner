@@ -141,7 +141,11 @@ def get_all_constraints(config, resource_handler, min_support=2, dict_filter=Fal
                     x.split("[")[0]])
 
         store_preprocessed(config, constraints, min_support, dict_filter, mark_redundant, with_nat_lang)
-
+    for to_ignore in config.CONSTRAINT_TYPES_TO_IGNORE:
+        constraints = constraints[~(constraints[config.TEMPLATE] == to_ignore)]
+    for level, to_ignore in config.CONSTRAINT_TEMPLATES_TO_IGNORE_PER_TYPE.items():
+        constraints = constraints[(constraints[config.LEVEL] != level) |
+                    ((constraints[config.LEVEL] == level) & (~constraints[config.TEMPLATE].isin(to_ignore)))]
     return constraints[~constraints[config.REDUNDANT]]
 
 

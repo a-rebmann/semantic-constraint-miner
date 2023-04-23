@@ -37,7 +37,7 @@ class ConstraintFitter:
                     record[self.config.CONSTRAINT_STR] = row[self.config.CONSTRAINT_STR].replace(
                         row[self.config.OBJECT], obj)
                     record[self.config.RECORD_ID] = row[self.config.RECORD_ID] + "_" + self.config.OBJECT + "_" + obj
-                    record[self.config.FITTED_RECORD_ID] = row[self.config.RECORD_ID]
+                    record[self.config.FITTED_RECORD_ID] = record[self.config.RECORD_ID]
                     fitted_constraints.append(record)
         elif len(row[self.config.OBJECT_BASED_SIM_EXTERNAL]) == 2:
             obj_sim_l = row[self.config.OBJECT_BASED_SIM_EXTERNAL][self.config.LEFT_OPERAND]

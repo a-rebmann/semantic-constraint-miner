@@ -57,7 +57,7 @@ class ConstraintFitter:
                         record[self.config.CONSTRAINT_STR] = record[self.config.CONSTRAINT_STR].replace(
                             row[self.config.RIGHT_OPERAND], obj)
                         _logger.info("double replacement" + record[self.config.CONSTRAINT_STR])
-                    record[self.config.FITTED_RECORD_ID] = row[self.config.RECORD_ID]
+                    record[self.config.FITTED_RECORD_ID] = record[self.config.RECORD_ID]
                     fitted_constraints.append(record)
             for obj, sim in obj_sim_r.items():
                 if sim >= sim_threshold:
@@ -69,7 +69,7 @@ class ConstraintFitter:
                         row[self.config.RIGHT_OPERAND], obj)
                     record[self.config.RECORD_ID] = row[
                                                         self.config.RECORD_ID] + "_" + self.config.RIGHT_OPERAND + "_" + obj
-                    record[self.config.FITTED_RECORD_ID] = row[self.config.RECORD_ID]
+                    record[self.config.FITTED_RECORD_ID] = record[self.config.RECORD_ID]
                     fitted_constraints.append(record)
         return (
             pd.DataFrame.from_records(fitted_constraints)

@@ -122,7 +122,7 @@ def get_all_constraints(config, resource_handler, min_support=2, dict_filter=Fal
             dict_fil = DictionaryFilter(config, constraints)
             dict_fil.mark_natural_language_objects()
             constraints = dict_fil.filter_with_proprietary_dict(prop_dict={})
-        #constraints = constraints[constraints[config.LEVEL] != config.ACTIVITY]
+        # constraints = constraints[constraints[config.LEVEL] != config.ACTIVITY]
         if mark_redundant:
             # We analyze the extracted constraints with respect to their hierarchy,
             # we then keep stronger constraints with the same support as weaker ones, which we remove
@@ -132,8 +132,7 @@ def get_all_constraints(config, resource_handler, min_support=2, dict_filter=Fal
             subsumption_analyzer.check_equal()
             # translate the DECLARE constraints into LTL formulae
         constraints.reset_index(inplace=True)
-        constraints[config.LTL] = constraints.apply(
-            lambda x: x[config.RECORD_ID] + " := " + to_ltl_str(x[config.CONSTRAINT_STR]) + ";", axis=1)
+
         if with_nat_lang:
             constraints[config.NAT_LANG_TEMPLATE] = constraints[config.CONSTRAINT_STR].apply(
                 lambda x: nat_lang_templates[
@@ -145,7 +144,10 @@ def get_all_constraints(config, resource_handler, min_support=2, dict_filter=Fal
         constraints = constraints[~(constraints[config.TEMPLATE] == to_ignore)]
     for level, to_ignore in config.CONSTRAINT_TEMPLATES_TO_IGNORE_PER_TYPE.items():
         constraints = constraints[(constraints[config.LEVEL] != level) |
-                    ((constraints[config.LEVEL] == level) & (~constraints[config.TEMPLATE].isin(to_ignore)))]
+                                  ((constraints[config.LEVEL] == level) & (
+                                      ~constraints[config.TEMPLATE].isin(to_ignore)))]
+    constraints[config.LTL] = constraints.apply(
+        lambda x: x[config.RECORD_ID] + " := " + to_ltl_str(x[config.CONSTRAINT_STR]) + ";", axis=1)
     return constraints[~constraints[config.REDUNDANT]]
 
 

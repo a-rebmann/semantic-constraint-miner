@@ -18,9 +18,12 @@ class ConstraintFitter:
         const_dfs = [self.fit_constraint(t, sim_threshold) for _, t in self.constraints.reset_index().iterrows()]
         if len(const_dfs) == 0:
             return pd.DataFrame()
-        return (
+        temp = (
             pd.concat(const_dfs).set_index(self.config.RECORD_ID)
         )
+        temp = temp.drop_duplicates(subset=[self.config.CONSTRAINT_STR, self.config.LEVEL,
+                                            self.config.MODEL_NAME, self.config.OBJECT])
+        return temp
 
     #  TODO: This is a very ugly method. Refactor it.
     #  TODO: This only considers object-based log-constraint similarity. Add support for other types of similarity.

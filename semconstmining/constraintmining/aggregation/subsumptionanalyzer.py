@@ -218,6 +218,12 @@ class SubsumptionAnalyzer:
             if len(to_mark) > 1:
                 _logger.warning("More than one constraint matched " + other_const_str)
             for i, row in to_mark.iterrows():
+                if not add_const:
+                    # check if the support of the other constraint is the same or smaller and if so,
+                    # mark the other as redundant.
+                    if row[self.config.SUPPORT] <= constraint_row[self.config.SUPPORT]:
+                        self.constraints.at[i, self.config.REDUNDANT] = True
+                        continue
                 # check if the support of the higher-level constraint is the same and if so,
                 # mark both as redundant and add to new one!
                 if row[self.config.SUPPORT] == constraint_row[self.config.SUPPORT]:

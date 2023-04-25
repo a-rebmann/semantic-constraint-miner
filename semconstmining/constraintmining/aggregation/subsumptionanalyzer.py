@@ -50,8 +50,8 @@ class SubsumptionAnalyzer:
 
             # get all constraints that involve the current operand
 
-        constraints = self.constraints[(~self.constraints[
-                 self.config.REDUNDANT])]  # | (self.constraints[RIGHT_OPERAND] == operand)
+        constraints = self.constraints[(~self.constraints[self.config.REDUNDANT])]
+        # | (self.constraints[RIGHT_OPERAND] == operand)
         non_red_const = len(constraints)
         counter = 0
         for constraint_tuple in constraints.itertuples():
@@ -76,7 +76,7 @@ class SubsumptionAnalyzer:
                     for i, row in to_mark.iterrows():
                         # check if the support of the higher-level constraint is the same and if so,
                         # mark that one as redundant!
-                        if row[self.config.SUPPORT] == constraint_tuple.support:
+                        if abs(row[self.config.SUPPORT] - constraint_tuple.support) <= 3:
                             self.constraints.at[i, self.config.REDUNDANT] = True
                     tmp = Template.get_template_from_string(tmp_str)
             #print("Checked " + str(counter) + " of " + str(non_red_const) + " constraints.")
@@ -102,7 +102,7 @@ class SubsumptionAnalyzer:
                         if len(to_mark) > 1:
                             _logger.warning("More than one constraint matched " + reversed_const_str)
                         for i, row in to_mark.iterrows():
-                            if row[self.config.SUPPORT] == constraint_row[self.config.SUPPORT]:
+                            if abs(row[self.config.SUPPORT] - constraint_row[self.config.SUPPORT]) <= 3:
                                 self.constraints.at[
                                     i, self.config.REDUNDANT] = True  # sets the reverse constraint as redundant
                                 done.add(i)
@@ -226,7 +226,7 @@ class SubsumptionAnalyzer:
                         continue
                 # check if the support of the higher-level constraint is the same and if so,
                 # mark both as redundant and add to new one!
-                if row[self.config.SUPPORT] == constraint_row[self.config.SUPPORT]:
+                if abs(row[self.config.SUPPORT] - constraint_row[self.config.SUPPORT]) <= 3:
                     self.constraints.at[i, self.config.REDUNDANT] = True  # sets the opponent constraint as redundant
                     if add_const:
                         self.constraints.at[

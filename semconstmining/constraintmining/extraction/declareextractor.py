@@ -144,8 +144,8 @@ class DeclareExtractor:
             d4py = Declare(self.config)
             d4py.log = self.object_action_log_projection(bo, filtered_traces)
             d4py.compute_frequent_itemsets(min_support=0.99, len_itemset=2)
-            d4py.discovery(consider_vacuity=False, max_declare_cardinality=2)
-            individual_res, associations = d4py.filter_discovery(min_support=0.99)
+            individual_res, associations = d4py.discovery(consider_vacuity=False, max_declare_cardinality=2)
+            # individual_res, associations = d4py.filter_discovery(min_support=0.99)
             # print(individual_res)
             if bo not in res:
                 res[bo] = set()

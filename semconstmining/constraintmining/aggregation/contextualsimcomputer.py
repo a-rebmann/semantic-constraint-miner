@@ -143,6 +143,20 @@ class ContextualSimilarityComputer:
         write_pickle(self.known_sims, self.knowm_sim_ser)
         return res_const
 
+    def compute_action_based_contextual_similarity_external(self, res_const, external, mode=mean):
+        _logger.info("Computing action-based contextual similarity with external actions")
+        res_const[self.config.ACTION_BASED_SIM_EXTERNAL] = 0.0
+        for idx, row in res_const.iterrows():
+            actions = self._prepare_actions(row)
+            if len(actions) < 1:
+                continue
+            unique_combinations = [(a, b) for idx, a in enumerate(actions) for b in external]
+            sims = self.get_sims(unique_combinations)
+            res_const.at[idx, self.config.ACTION_BASED_SIM_EXTERNAL] = mode(sims)
+            # Persist known similarities to avoid later reprocessing
+        write_pickle(self.known_sims, self.knowm_sim_ser)
+        return res_const
+
     def compute_object_based_contextual_similarity_external(self, res_const, external):
         _logger.info("Computing object-based contextual similarity with external objects " + str(external))
         res_const[self.config.OBJECT_BASED_SIM_EXTERNAL] = {}
@@ -246,7 +260,8 @@ class ContextualSimilarityComputer:
     def _prepare_names(self, row):
         names = row[self.config.MODEL_NAME].split("|")
         names = [label_utils.sanitize_label(name)
-                 for name in names if label_utils.sanitize_label(name) not in self.config.TERMS_FOR_MISSING]
+                 for name in names if label_utils.sanitize_label(name) not in self.config.TERMS_FOR_MISSING
+                 and not type(name) == float]
         # Computing semantic similarity using sentence transformers is super expensive on CPU, therefore,
         # we randomly pick k names for which we make comparisons TODO any way to ground this procedure on something?
         if len(names) > 10:
@@ -254,6 +269,8 @@ class ContextualSimilarityComputer:
         return names
 
     def _prepare_objs(self, group, multi_obj=False):
+        group = group[(group[self.config.LEVEL] == self.config.MULTI_OBJECT) |
+                      (group[self.config.LEVEL] == self.config.OBJECT)]
         if multi_obj:
             unique_bos = list(group[self.config.LEFT_OPERAND].unique())
             for obj in group[self.config.RIGHT_OPERAND].unique():
@@ -263,11 +280,23 @@ class ContextualSimilarityComputer:
             unique_bos = list(group[self.config.OBJECT].unique())
         if "" in unique_bos:
             unique_bos.remove("")
-        return unique_bos
+        return [bo for bo in unique_bos if not pd.isna(bo) and bo not in self.config.TERMS_FOR_MISSING]
+
+    def _prepare_actions(self, group):
+        group = group[(group[self.config.LEVEL] == self.config.OBJECT)]
+        unique_actions = list(group[self.config.LEFT_OPERAND].unique())
+        for act in group[self.config.RIGHT_OPERAND].unique():
+            if act not in unique_actions:
+                unique_actions.append(act)
+        if "" in unique_actions:
+            unique_actions.remove("")
+        return [action for action in unique_actions if not pd.isna(action)
+                and action not in self.config.TERMS_FOR_MISSING]
 
     def pre_compute_embeddings(self, sentences=None):
         if sentences is None:
-            sentences = list(set(name for names in self.constraints[self.config.MODEL_NAME].unique() for name in names.split("|")))
+            sentences = list(set(name for names in self.constraints[self.config.MODEL_NAME].unique()
+                                 for name in names.split("|")))
 
             if self.resource_handler is not None:
                 unique_ids = list(set(
@@ -279,7 +308,7 @@ class ContextualSimilarityComputer:
                 )
                 sentences += concat_labels
         sentences = [label_utils.sanitize_label(name) for name in sentences if not pd.isna(name) and
-                     label_utils.sanitize_label(name) not in self.config.TERMS_FOR_MISSING]
+                     label_utils.sanitize_label(name) not in self.config.TERMS_FOR_MISSING and not type(name) == float]
         sentences += self._prepare_objs(self.constraints)
         sentences += self._prepare_objs(self.constraints, multi_obj=True)
         self.known_embeddings |= {sent: embedding for sent, embedding in

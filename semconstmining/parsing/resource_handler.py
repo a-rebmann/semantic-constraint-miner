@@ -270,7 +270,7 @@ class ResourceHandler:
             self.dictionary[self.config.IS_REFERENCED] = \
                 self.dictionary.index.isin(self.components.referenced_dict_entries)
         if self.config.DICTIONARY not in self.bpmn_model_elements.columns:
-            self.bpmn_model_elements[self.config.DICTIONARY] = []
+            self.bpmn_model_elements[self.config.DICTIONARY] = None
 
     def load_or_create_components(self):
         """

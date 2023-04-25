@@ -124,7 +124,7 @@ class BpmnModelParser:
         try:
             f, l, _ = fromJSON(model_dict)
         except KeyError as e:
-            _logger.warning("Could not parse model %s, skipping", model_id)
+            _logger.debug("Could not parse model %s, skipping", model_id)
             return elements_flat
         follows = {}
         labels = {}

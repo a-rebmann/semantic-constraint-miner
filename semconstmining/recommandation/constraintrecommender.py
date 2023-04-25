@@ -126,6 +126,17 @@ class ConstraintRecommender:
                 constraints, self.log_info.labels)
         return constraints[constraints[self.config.LABEL_BASED_SIM_EXTERNAL] >= sim_thresh]
 
+    def recommend_by_actions(self, constraints, sim_thresh) -> DataFrame:
+        if len(constraints) == 0:
+            return constraints
+        if len(self.log_info.actions) == 0:
+            raise RuntimeError("No actions available")
+        if self.config.ACTION_BASED_SIM_EXTERNAL not in constraints.columns:
+            self.context_sim_computer.pre_compute_embeddings(self.log_info.actions)
+            constraints = self.context_sim_computer.compute_action_based_contextual_similarity_external(
+                constraints, self.log_info.actions)
+        return constraints[constraints[self.config.ACTION_BASED_SIM_EXTERNAL] >= sim_thresh]
+
     def recommend(self, constraints, recommender_config: RecommendationConfig):
         if len(constraints) == 0:
             return constraints

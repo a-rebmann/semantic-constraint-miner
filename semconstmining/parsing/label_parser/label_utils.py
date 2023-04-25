@@ -16,6 +16,7 @@ CAMEL_PATTERN_2 = re.compile('([a-z0-9])([A-Z])')
 
 def sanitize_label(label):
     # handle some special cases
+    label = str(label)
     label = label.replace('\n', ' ').replace('\r', '')
     label = label.replace('(s)', 's')
     label = re.sub(' +', ' ', label)

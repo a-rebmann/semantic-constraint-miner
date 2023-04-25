@@ -33,23 +33,13 @@ def _get_json_from_row(row_tuple):
     return json.loads(row_tuple.model_json)
 
 
-def create_variant_log(log):
-    variant_log = EventLog()
-    seen = set()
-    for trace in log:
-        trace_labels = tuple([x["concept:name"] for x in trace])
-        if trace_labels not in seen:
-            variant_log.append(trace)
-            seen.add(trace_labels)
-    return variant_log
-
-
 class Model2LogConverter:
 
     def __init__(self, config):
         self.config = config
         self.converter = JsonToPetriNetConverter()
         self.done = 0
+        self.loop_counter = 0
 
     def alarm_handler(self, signum, frame):
         raise Exception("timeout")
@@ -72,6 +62,7 @@ class Model2LogConverter:
             df_results.append(df)
         stop = time.time()
         completed_in = round(stop - start, 2)
+        _logger.info("with loops " + str(self.loop_counter))
         _logger.info("-------------------------------------------")
         _logger.info("PPID %s Completed in %s" % (os.getpid(), completed_in))
         return pd.concat(df_results)
@@ -152,6 +143,20 @@ class Model2LogConverter:
         return pd.DataFrame(
             {"model_id": ids, "pn": pns, "follows": follows, "labels": labels, "name": names})
 
+    def create_variant_log(self, log):
+        variant_log = EventLog()
+        seen = set()
+        already_counted_loop = False
+        for trace in log:
+            trace_labels = tuple([x["concept:name"] for x in trace])
+            if trace_labels not in seen:
+                variant_log.append(trace)
+                seen.add(trace_labels)
+                if 0 < len(trace_labels) == len(set(trace_labels)) and not already_counted_loop:
+                    self.loop_counter += 1
+                    already_counted_loop = True
+        return variant_log
+
     def log_creation_check(self, row, model_elements):
         # _logger.info("Log creation. " + row.model_id)
         played_out_log = None
@@ -162,7 +167,7 @@ class Model2LogConverter:
             try:
                 net, im, fm = row.pn
                 log = pm4py.play_out(net, im, fm, variant=Variants.EXTENSIVE)
-                variant_log = create_variant_log(log)
+                variant_log = self.create_variant_log(log)
                 if not self.config.LOOPS:
                     played_out_log = create_log_without_loops(variant_log)
                 else:

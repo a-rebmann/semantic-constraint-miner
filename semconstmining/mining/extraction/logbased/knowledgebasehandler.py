@@ -4,8 +4,8 @@ from os.path import exists
 import pandas as pd
 from tqdm import tqdm
 
-from semconstmining.constraintmining.extraction import verboceanextractor
-from semconstmining.constraintmining.extraction.logbased.constraintknowledgebase import ConstraintKnowledgeBase
+from semconstmining.mining.extraction import verboceanextractor
+from semconstmining.mining.extraction.logbased.constraintknowledgebase import ConstraintKnowledgeBase
 
 _logger = logging.getLogger(__name__)
 

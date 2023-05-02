@@ -8,6 +8,7 @@ class LogHandler:
 
     def __init__(self, config):
         self.config = config
+        self.log = None
 
     def handle_non_standard_att_names(self, pd_log, att_names):
         if len(att_names) == 3:
@@ -38,4 +39,14 @@ class LogHandler:
             log = self.read_csv_log(path, name)
         elif ".xes" in name:
             log = self.read_xes_log(path, name)
-        return log
+        self.log = log
+        return self.log
+
+    def get_resources_to_tasks(self):
+        if self.log is None:
+            raise RuntimeError("You must load a log before.")
+        res_to_tasks = {}
+        if self.config.XES_ROLE in self.log.columns:
+            for role, group in self.log.groupby(self.config.XES_ROLE):
+                res_to_tasks[role] = set(group[self.config.XES_NAME].unique())
+        return res_to_tasks

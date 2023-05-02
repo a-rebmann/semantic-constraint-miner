@@ -1,7 +1,10 @@
+import json
 from pathlib import Path
 
-from semconstmining.constraintmining.model.constraint import Observation
+from semconstmining.mining.model.constraint import Observation
 from semconstmining.declare.enums import Template
+
+example_models = json.load(open(Path(__file__).parents[0].resolve() / "parsing/prefilled_example_processes.json", "r"))
 
 
 class Config:
@@ -16,6 +19,7 @@ class Config:
         self.DATA_DATASET = self.DATA_RAW / self.MODEL_COLLECTION / "models"
         self.DATA_DATASET_DICT = self.DATA_RAW / self.MODEL_COLLECTION / "dict"
         self.DATA_INTERIM = self.DATA_ROOT / "interim"
+        self.DATA_EVAL = self.DATA_ROOT / "eval"
         self.SRC_ROOT = self.PROJECT_ROOT / "src" / "semconstmining"
         self.FIGURES_ROOT = self.PROJECT_ROOT / "reports" / "figures"
         self.PETRI_LOGS_DIR = self.DATA_INTERIM / "bpmn_logs"
@@ -54,9 +58,7 @@ class Config:
         self.NAME_DUMMY = "Jane Doe"
         self.NUMBER_DUMMY = "12345678"
 
-        self.EXAMPLE_MODEL_NAMES = ["Procure parts", "Receipt of Goods", "Receipt of Application",
-                                    "Procurement of Work Equipment",
-                                    "Employee Onboarding"]
+        self.EXAMPLE_MODEL_NAMES = [name for batch in example_models["example_processes"] for name in batch["content"]]
 
         self.COLORS_SIGNAVIO_HSL = [
             "hsl(309, 88%, 33%)", "hsl(313, 81%, 35%)", "hsl(318, 75%, 36%)", "hsl(322, 70%, 39%)",
@@ -132,16 +134,24 @@ class Config:
         self.TEMPLATE = "template"
         self.LTL = "ltl"
 
-        # DIFFERENT TYPES OF CONTEXTUAL SIMILARITIES
-        self.NAME_BASED_SIM = "name_based_sim"
-        self.OBJECT_BASED_SIM = "object_based_sim"
-        self.LABEL_BASED_SIM = "label_based_sim"
+        # DIFFERENT TYPES OF GENERALITY SCORES
+        self.NAME_BASED_GENERALITY = "name_based_generality"
+        self.LABEL_BASED_GENERALITY = "object_based_generality"
+        self.OBJECT_BASED_GENERALITY = "label_based_generality"
 
-        self.NAME_BASED_SIM_EXTERNAL = "name_based_sim_external"
-        self.LABEL_BASED_SIM_EXTERNAL = "label_based_sim_external"
+        # DIFFERENT TYPES OF RELEVANCE SCORES
+        self.NAME_BASED_RELEVANCE = "name_based_relevance"
+        self.LABEL_BASED_RELEVANCE = "label_based_relevance"
+        self.OBJECT_BASED_RELEVANCE = "object_based_relevance"
+        self.ACTION_BASED_RELEVANCE = "action_based_relevance"
+        self.RESOURCE_BASED_RELEVANCE = "resource_based_relevance"
 
-        self.OBJECT_BASED_SIM_EXTERNAL = "object_based_sim_external"
-        self.MAX_OBJECT_BASED_SIM_EXTERNAL = "max_object_based_sim_external"
+        self.INDIVIDUAL_RELEVANCE_SCORES = "individual_relevance_scores"
+        self.SEMANTIC_BASED_RELEVANCE = "semantic_based_relevance"
+        self.CONSTRAINT_BASED_RELEVANCE = "constraint_based_relevance"
+
+        # OVERALL RELEVANCE SCORE
+        self.RELEVANCE_SCORE = "relevance_score"
 
         # ARITY OF CONSTRAINTS
         self.UNARY = "Unary"

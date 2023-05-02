@@ -1,6 +1,6 @@
-from semconstmining.parsing.label_parser import label_utils
-from semconstmining.conformance.similaritycomputer import SimMode
-from semconstmining.constraintmining.model.constraint import Observation, Constraint
+from semconstmining.parsing.label_parser import nlp_helper
+from semconstmining.checking.legacy.similaritycomputer import SimMode
+from semconstmining.mining.model.constraint import Observation, Constraint
 
 
 class ConstraintKnowledgeBase:
@@ -12,7 +12,7 @@ class ConstraintKnowledgeBase:
         self.actions = None
         self.min_support = 1
         self.apply_filter_heuristics = False
-        self.label_util = label_utils.LabelUtil(config)
+        self.label_util = label_utils.NlpHelper(config)
 
     def get_record(self, action1, action2, record_type):
         action1 = self.label_util.lemmatize_word(action1)

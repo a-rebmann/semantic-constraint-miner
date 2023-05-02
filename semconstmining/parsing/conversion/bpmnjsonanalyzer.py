@@ -1,6 +1,6 @@
 import json
 
-from semconstmining.parsing.label_parser import label_utils
+from semconstmining.parsing.label_parser import nlp_helper
 
 
 def compute_finite_paths_of_tasks(follows, labels, tasks):
@@ -197,7 +197,7 @@ def loadJSON(path_to_json):
     follows, labels, tasks = process_bpmn_shapes(json_data['childShapes'])
     # sanitize all task labels
     for task in tasks:
-        labels[task] = label_utils.sanitize_label(labels[task])
+        labels[task] = nlp_helper.sanitize_label(labels[task])
     return follows, labels, tasks
 
 
@@ -205,7 +205,7 @@ def fromJSON(json_str):
     follows, labels, tasks = process_bpmn_shapes(json_str['childShapes'])
     # sanitize all task labels
     for task in tasks:
-        labels[task] = label_utils.sanitize_label(labels[task])
+        labels[task] = nlp_helper.sanitize_label(labels[task])
     return follows, labels, tasks
 
 

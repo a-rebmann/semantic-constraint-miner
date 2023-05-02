@@ -1,6 +1,6 @@
 from enum import Enum
 
-from semconstmining.constraintmining.model.constraint import Observation
+from semconstmining.mining.model.constraint import Observation
 
 
 class Template(str, Enum):

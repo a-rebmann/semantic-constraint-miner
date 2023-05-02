@@ -49,13 +49,13 @@ def create_log_without_loops(log):
 def filter_irrelevant_labels(log):
     cleaned_log = EventLog()
     for trace in log:
-        new_trace = Trace([event for event in trace if _is_relevant_label(event["concept:name"])])
+        new_trace = Trace([event for event in trace if is_relevant_label(event["concept:name"])])
         if len(new_trace) > 0:
             cleaned_log.append(new_trace)
     return cleaned_log
 
 
-def _is_relevant_label(task_name):
+def is_relevant_label(task_name):
     terms = {"Message"}
     if task_name == None:
         return False

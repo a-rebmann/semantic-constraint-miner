@@ -1,5 +1,6 @@
 import os
 import sys
+import time
 import warnings
 from os.path import exists
 from pathlib import Path
@@ -10,25 +11,27 @@ from pandas import DataFrame
 from semconstmining.log.loghandler import LogHandler
 from semconstmining.log.loginfo import LogInfo
 from semconstmining.log.logstats import LogStats
-from semconstmining.conformance.declare_checker import DeclareChecker
+from semconstmining.checking.constraintchecking.declare_checker import DeclareChecker
 from semconstmining.config import Config
-from semconstmining.constraintmining.aggregation.contextualsimcomputer import ContextualSimilarityComputer, read_pickle, \
+from semconstmining.mining.generality.contextualsimcomputer import ContextualSimilarityComputer, read_pickle, \
     write_pickle
-from semconstmining.constraintmining.aggregation.dictionaryfilter import DictionaryFilter
-from semconstmining.constraintmining.aggregation.subsumptionanalyzer import SubsumptionAnalyzer
+from semconstmining.mining.aggregation.dictionaryfilter import DictionaryFilter
+from semconstmining.mining.aggregation.subsumptionanalyzer import SubsumptionAnalyzer
 from semconstmining.declare.ltl.declare2ltlf import to_ltl_str
 from semconstmining.declare.parsers.decl_parser import parse_single_constraint
 from semconstmining.declare.enums import nat_lang_templates
-from semconstmining.recommandation.consistency import ConsistencyChecker
-from semconstmining.recommandation.constraintfilter import ConstraintFilter
-from semconstmining.recommandation.constraintrecommender import ConstraintRecommender
-from semconstmining.recommandation.constraintfitter import ConstraintFitter
-from semconstmining.recommandation.filter_config import FilterConfig
-from semconstmining.recommandation.recommendation_config import RecommendationConfig
+from semconstmining.parsing.label_parser.nlp_helper import NlpHelper
+from semconstmining.selection.consistency.consistency import ConsistencyChecker
+from semconstmining.selection.instantiation.constraintfilter import ConstraintFilter
+from semconstmining.selection.instantiation.constraintrecommender import ConstraintRecommender
+from semconstmining.selection.instantiation.constraintfitter import ConstraintFitter
+from semconstmining.selection.instantiation.filter_config import FilterConfig
+from semconstmining.selection.instantiation.recommendation_config import RecommendationConfig
+from semconstmining.selection.relevance.relevance_computer import RelevanceComputer
 
 warnings.simplefilter('ignore')
 import logging
-from semconstmining.constraintmining.extraction.extractionhandler import ExtractionHandler
+from semconstmining.mining.extraction.extractionhandler import ExtractionHandler
 from semconstmining.parsing.resource_handler import ResourceHandler
 
 logging.basicConfig(format='[%(asctime)s] p%(process)s {%(filename)s:%(lineno)d} %(levelname)s - %(message)s',
@@ -83,8 +86,8 @@ def load_preprocessed(config, min_support, dict_filter, mark_redundant, with_nat
     return consts
 
 
-def get_all_constraints(config, resource_handler, min_support=2, dict_filter=False,
-                        mark_redundant=True, with_nat_lang=True):
+def get_or_mine_constraints(config, resource_handler, min_support=2, dict_filter=False,
+                            mark_redundant=True, with_nat_lang=True):
     """
     Get all constraints from the observations extracted from the process model collection
     :param resource_handler: The resources, i.e., the process models, to be analyzed
@@ -151,24 +154,24 @@ def get_all_constraints(config, resource_handler, min_support=2, dict_filter=Fal
     return constraints[~constraints[config.REDUNDANT]]
 
 
-def check_constraints(config, log_name, constraints=None):
+def check_constraints(config, log_name, constraints, nlp_helper):
     lh = LogHandler(config)
     constraints = DataFrame() if constraints is None else constraints
     pd_log = lh.read_log(config.DATA_LOGS, log_name)
     if pd_log is None:
         return None
-    declare_checker = DeclareChecker(config, pd_log, constraints)
+    declare_checker = DeclareChecker(config, pd_log, constraints, nlp_helper)
     return declare_checker.check_constraints()
 
 
-def get_resource_handler(config):
+def get_resource_handler(config, nlp_helper):
     """
     # Preparing the resources for constraint mining from the given model collection
     # Either the models from the SAP-SAM data set are used (default) or the models from a Signavio workspace
     (configure the workspace ID in the log.auth script)
     :return:
     """
-    resource_handler = ResourceHandler(config)
+    resource_handler = ResourceHandler(config, nlp_helper)
     resource_handler.load_bpmn_model_elements()
     resource_handler.load_dictionary_if_exists()
     resource_handler.determine_model_languages()
@@ -181,7 +184,7 @@ def get_resource_handler(config):
     return resource_handler
 
 
-def get_context_sim_computer(config, constraints, resource_handler, min_support=2, dict_filter=False,
+def get_context_sim_computer(config, constraints, nlp_helper, resource_handler, min_support=2, dict_filter=False,
                              mark_redundant=True,
                              with_nat_lang=True):
     """
@@ -197,7 +200,7 @@ def get_context_sim_computer(config, constraints, resource_handler, min_support=
     constraints
     resource_handler
     """
-    contextual_similarity_computer = ContextualSimilarityComputer(config, constraints, resource_handler)
+    contextual_similarity_computer = ContextualSimilarityComputer(config, constraints, nlp_helper, resource_handler)
     contextual_similarity_computer.compute_object_based_contextual_dissimilarity()
     contextual_similarity_computer.compute_label_based_contextual_dissimilarity()
     contextual_similarity_computer.compute_name_based_contextual_dissimilarity()
@@ -205,40 +208,57 @@ def get_context_sim_computer(config, constraints, resource_handler, min_support=
     return contextual_similarity_computer
 
 
-def recommend_constraints_for_log(config, constraints, process, contextual_similarity_computer):
+def compute_relevance_for_log(config, constraints, nlp_helper, resource_handler, process):
     lh = LogHandler(config)
     pd_log = lh.read_log(config.DATA_LOGS, process)
     if pd_log is None:
         _logger.info("No log found for process " + process)
         return None
     labels = list(pd_log[config.XES_NAME].unique())
-    log_info = LogInfo(contextual_similarity_computer.resource_handler.bert_parser, labels, [process])
-    recommender = ConstraintRecommender(config, contextual_similarity_computer, log_info)
-    # recommended_constraints = recommender.non_conflicting_max_relevance(constraints, recommender_config)
-    recommended_constraints = recommender.recommend(constraints, recommender_config)
+    resources_to_tasks = lh.get_resources_to_tasks()
+    log_info = LogInfo(nlp_helper, labels, [process], resources_to_tasks)
+    start_time = time.time()
+    relevance_computer = RelevanceComputer(config, nlp_helper, resource_handler, log_info)
+    constraints = relevance_computer.compute_relevance(constraints)
+    _logger.info("Relevance computation took " + str(time.time() - start_time) + " seconds")
+    return constraints
+
+
+def recommend_constraints_for_log(config, rec_config, constraints, nlp_helper, process):
+    lh = LogHandler(config)
+    pd_log = lh.read_log(config.DATA_LOGS, process)
+    if pd_log is None:
+        _logger.info("No log found for process " + process)
+        return None
+    labels = list(pd_log[config.XES_NAME].unique())
+    log_info = LogInfo(nlp_helper, labels, [process])
+    recommender = ConstraintRecommender(config, rec_config, log_info)
+    recommended_constraints = recommender.recommend(constraints)
     constraint_fitter = ConstraintFitter(config, process, recommended_constraints)
     fitted_constraints = constraint_fitter.fit_constraints()
-    fitted_constraints = recommender.recommend_by_activation(fitted_constraints, recommender_config)
+    fitted_constraints = recommender.recommend_by_activation(fitted_constraints)
     return fitted_constraints
 
 
 def run_full_extraction_pipeline(config: Config, process: str, filter_config: FilterConfig = None,
                                  recommender_config: RecommendationConfig = None):
     # General pipeline for constraint extraction, no log-specific recommendation
-    resource_handler = get_resource_handler(config)
-    options = resource_handler.get_filter_options()
-    all_constraints = get_all_constraints(config, resource_handler)
-    contextual_similarity_computer = get_context_sim_computer(config, all_constraints, resource_handler)
+    nlp_helper = NlpHelper(config)
+    resource_handler = get_resource_handler(config, nlp_helper)
+    all_constraints = get_or_mine_constraints(config, resource_handler)
+    contextual_similarity_computer = get_context_sim_computer(config, all_constraints, nlp_helper, resource_handler)
+    # Filter constraints (optional)
     const_filter = ConstraintFilter(config, filter_config, resource_handler)
     filtered_constraints = const_filter.filter_constraints(all_constraints)
-
     # Log-specific constraint recommendation
-    recommended_constraints = recommend_constraints_for_log(config, filtered_constraints, process,
-                                                            contextual_similarity_computer)
+    filtered_constraints = compute_relevance_for_log(config, filtered_constraints, nlp_helper, resource_handler,
+                                                     process)
+    recommended_constraints = recommend_constraints_for_log(config, recommender_config, filtered_constraints, nlp_helper,
+                                                            process)
     consistency_checker = ConsistencyChecker(config)
     inconsistent_subsets = consistency_checker.check_consistency(recommended_constraints)
     # TODO ask user to select correction set, or just recommend subset where least relevant correction set is removed
-    check_constraints(config, process, recommended_constraints)
+    violations = check_constraints(config, process, recommended_constraints, nlp_helper)
     _logger.info("Done")
 
 
@@ -247,8 +267,8 @@ CURRENT_LOG_FILE = "semconsttest.xes"
 
 if __name__ == "__main__":
     conf = Config(Path(__file__).parents[2].resolve(), "opal")
-    filter_config = FilterConfig(conf)
-    recommender_config = RecommendationConfig(conf)
+    filt_config = FilterConfig(conf)
+    rec_config = RecommendationConfig(conf)
     run_full_extraction_pipeline(config=conf, process=CURRENT_LOG_FILE,
-                                 filter_config=filter_config, recommender_config=recommender_config)
+                                 filter_config=filt_config, recommender_config=rec_config)
     sys.exit(0)

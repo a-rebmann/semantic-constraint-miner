@@ -5,8 +5,8 @@ import pandas as pd
 from pm4py.objects.log.obj import EventLog, Trace, Event
 
 from semconstmining.declare.parsers import parse_single_constraint
-from semconstmining.parsing.conversion.petrinetanalysis import _is_relevant_label
-from semconstmining.constraintmining.model.parsed_label import get_dummy
+from semconstmining.parsing.conversion.petrinetanalysis import is_relevant_label
+from semconstmining.mining.model.parsed_label import get_dummy
 from semconstmining.declare.declare import Declare
 from semconstmining.parsing.resource_handler import ResourceHandler
 
@@ -182,7 +182,7 @@ class DeclareExtractor:
 
     def get_parsed_tasks(self, log, resource_handler, only_relevant_labels=True):
         relevant_tasks = set([x[self.config.XES_NAME] for trace in log for x in trace if
-                              _is_relevant_label(x[self.config.XES_NAME])]) if only_relevant_labels else set(
+                              is_relevant_label(x[self.config.XES_NAME])]) if only_relevant_labels else set(
             [x[self.config.XES_NAME] for trace in log for x in trace])
         return {t: resource_handler.get_parsed_task(t) for t in relevant_tasks}
 

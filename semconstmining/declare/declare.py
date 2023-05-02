@@ -16,7 +16,7 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 class Declare:
     """
-    Wrapper that collects the input log and model, the supported templates, the output for the discovery, conformance
+    Wrapper that collects the input log and model, the supported templates, the output for the discovery, checking
     checking and query checking tasks. In addition, it contains the computed binary encoding and frequent items
     for the input log.
 
@@ -338,7 +338,7 @@ class Declare:
     # PROCESS MINING TASKS
     def conformance_checking(self, consider_vacuity: bool) -> dict[tuple[int, str]: dict[str: CheckerResult]]:
         """
-        Performs conformance checking for the provided event log and DECLARE model.
+        Performs checking checking for the provided event log and DECLARE model.
 
         Parameters
         ----------
@@ -353,7 +353,7 @@ class Declare:
             the number of pendings, activations, violations, fulfilments and the truth value of the trace for that
             constraint.
         """
-        print("Computing conformance checking ...")
+        print("Computing checking checking ...")
         if self.log is None:
             raise RuntimeError("You must load the log before checking the model.")
         if self.model is None:
@@ -654,7 +654,7 @@ class Declare:
     # FUNCTIONS FOR PRINTING RESULTS ##############
     def print_conformance_results(self):
         if self.conformance_checking_results is None:
-            raise RuntimeError("You must run conformance checking before!")
+            raise RuntimeError("You must run checking checking before!")
 
         for key, value in self.conformance_checking_results.items():
             print('Trace ID: ' + str(key[0]) + ' - "' + key[1] + '"')

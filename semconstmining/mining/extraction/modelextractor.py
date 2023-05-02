@@ -6,10 +6,10 @@ from typing import List, Dict
 import pandas as pd
 import logging
 
-from semconstmining.constraintmining.extraction.declareextractor import _get_constraint_template
-from semconstmining.parsing.label_parser import label_utils
+from semconstmining.mining.extraction.declareextractor import _get_constraint_template
+from semconstmining.parsing.label_parser import nlp_helper
 from semconstmining.parsing.conversion.bpmnjsonanalyzer import process_bpmn_shapes
-from semconstmining.constraintmining.model.constraint import Observation
+from semconstmining.mining.model.constraint import Observation
 from semconstmining.parsing.conversion import bpmnjsonanalyzer as bpmn_analyzer
 from semconstmining.declare.enums import Template
 from semconstmining.parsing.resource_handler import ResourceHandler
@@ -113,7 +113,7 @@ class ModelExtractor:
                             choice_sets[s]["choices"].add(seq)
         return choice_sets
 
-    def _get_observations_for_decision_perspective(self, json_str, types_to_ignore):
+    def _get_observations_for_decision_perspective(self, model_id, json_str, types_to_ignore):
         observations = []
         if Template.EXCLUSIVE_CHOICE.templ_str not in types_to_ignore:
             try:
@@ -121,11 +121,11 @@ class ModelExtractor:
                 choice_sets = self._traverse_and_extract_decisions(follows, labels, tasks)
                 for gateway_id, gateway_payload in choice_sets.items():
                     for choice1 in gateway_payload["choices"]:
-                        if label_utils.sanitize_label(choice1) != "":
+                        if nlp_helper.sanitize_label(choice1) != "":
                             for choice2 in gateway_payload["choices"]:
-                                if label_utils.sanitize_label(choice2) != "" and not choice1 == choice2:
-                                    decision_left, decision_right = label_utils.sanitize_label(
-                                        choice1), label_utils.sanitize_label(choice2)
+                                if nlp_helper.sanitize_label(choice2) != "" and not choice1 == choice2:
+                                    decision_left, decision_right = nlp_helper.sanitize_label(
+                                        choice1), nlp_helper.sanitize_label(choice2)
                                     if decision_left != decision_right and \
                                             decision_left not in self.config.IRRELEVANT_CONSTRAINTS[
                                         Template.EXCLUSIVE_CHOICE.templ_str] and \
@@ -155,9 +155,9 @@ class ModelExtractor:
         observations = []
         json_str = _get_json_from_row(row_tuple)
         # The resource perspective
-        observations.extend(self._get_observations_for_resource_perspective(json_str, types_to_ignore))
+        observations.extend(self._get_observations_for_resource_perspective(row_tuple.model_id, json_str, types_to_ignore))
         # The data perspective
-        observations.extend(self._get_observations_for_decision_perspective(json_str, types_to_ignore))
+        observations.extend(self._get_observations_for_decision_perspective(row_tuple.model_id, json_str, types_to_ignore))
         # The object perspective
         #observations.extend(self._get_observations_for_object_perspective(json_str, types_to_ignore))
         return (
@@ -165,7 +165,7 @@ class ModelExtractor:
                 model_name=row_tuple.name)
         )
 
-    def _get_observations_for_resource_perspective(self, json_str, types_to_ignore):
+    def _get_observations_for_resource_perspective(self, model_id, json_str, types_to_ignore):
         observations = []
         pools = {}
         lanes = {}
@@ -178,19 +178,21 @@ class ModelExtractor:
             for _, lane_info in lanes.items():
                 for shape_id, label in lane_info["labels"].items():
                     if shape_id in lane_info["tasks"]:
-                        lan_str = label_utils.sanitize_label(lane_info["name"])
-                        task_str = label_utils.sanitize_label(label)
+                        lan_str = nlp_helper.sanitize_label(lane_info["name"])
+                        task_str = nlp_helper.sanitize_label(label)
                         if lan_str == 'lane' or lan_str in self.config.TERMS_FOR_MISSING or task_str in self.config.TERMS_FOR_MISSING:
                             continue
                         observation = (task_str, lan_str,
                                        _create_mp_declare_const_with_role_condition(task_str, lan_str), self.config.RESOURCE, self.config.UNARY,
                                        "")
                         observations.append(observation)
+                        self.resource_handler.components.add_resource(model_id, lan_str)
+                        self.resource_handler.components.add_task_to_resource(model_id, task_str, lan_str)
             for _, pool_info in pools.items():
                 for shape_id, label in pool_info["labels"].items():
                     if shape_id in pool_info["tasks"]:
-                        pool_str = label_utils.sanitize_label(pool_info["name"])
-                        task_str = label_utils.sanitize_label(label)
+                        pool_str = nlp_helper.sanitize_label(pool_info["name"])
+                        task_str = nlp_helper.sanitize_label(label)
                         if pool_str == 'pool' or pool_str in self.config.TERMS_FOR_MISSING or task_str in self.config.TERMS_FOR_MISSING:
                             continue
                         observation = (task_str, pool_str,
@@ -198,14 +200,15 @@ class ModelExtractor:
                                        self.config.UNARY,
                                        "")
                         observations.append(observation)
+                        self.resource_handler.components.add_task_to_resource(model_id, task_str, pool_str)
 
         # DEPRECATED: TODO find proper way to represent this in DECLARE or SiGNAL
         if Observation.RESOURCE_CONTAINMENT not in types_to_ignore:
             for pool_id, pool_info in pools.items():
                 for shape_id, label in pool_info["labels"].items():
                     if shape_id in lanes:
-                        pool_str = label_utils.sanitize_label(pool_info["name"])
-                        task_str = label_utils.sanitize_label(label)
+                        pool_str = nlp_helper.sanitize_label(pool_info["name"])
+                        task_str = nlp_helper.sanitize_label(label)
                         if pool_str == 'pool' or pool_str in self.config.TERMS_FOR_MISSING or task_str in self.config.TERMS_FOR_MISSING:
                             continue
                         observation = (pool_str, task_str,
@@ -230,10 +233,10 @@ class ModelExtractor:
     def add_operands(self, res):
         for rec in res:
             if rec[self.config.OPERATOR_TYPE] == self.config.UNARY:
-                op_l = rec[self.config.CONSTRAINT_STR].split("[")[1].replace("]", "").replace("|", "").strip()
+                op_l = rec[self.config.CONSTRAINT_STR].split("[")[1].split("]")[0].strip()
                 rec[self.config.LEFT_OPERAND] = op_l if op_l not in self.config.TERMS_FOR_MISSING else ""
             if rec[self.config.OPERATOR_TYPE] == self.config.BINARY:
-                ops = rec[self.config.CONSTRAINT_STR].split("[")[1].replace("]", "").replace("|", "").split(",")
+                ops = rec[self.config.CONSTRAINT_STR].split("[")[1].split("]")[0].split(",")
                 op_l = ops[0].strip()
                 op_r = ops[1].strip()
                 rec[self.config.LEFT_OPERAND] = op_l if op_l not in self.config.TERMS_FOR_MISSING else ""

@@ -1,11 +1,10 @@
 import logging
 from os.path import exists
-from typing import List
 
 import pandas as pd
 
-from semconstmining.constraintmining.extraction.declareextractor import DeclareExtractor
-from semconstmining.constraintmining.extraction.modelextractor import ModelExtractor
+from semconstmining.mining.extraction.declareextractor import DeclareExtractor
+from semconstmining.mining.extraction.modelextractor import ModelExtractor
 from semconstmining.parsing.resource_handler import ResourceHandler
 
 _logger = logging.getLogger(__name__)

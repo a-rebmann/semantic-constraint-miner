@@ -1,20 +1,22 @@
 import pandas as pd
-from semconstmining.parsing.label_parser import BertTagger
-from semconstmining.parsing.label_parser.label_utils import sanitize_label
+from semconstmining.parsing.label_parser.nlp_helper import sanitize_label, NlpHelper
 
 
 class LogInfo:
 
-    def __init__(self, bert_parser: BertTagger, labels: list = None, names: list = None, resources: list = None):
+    def __init__(self, nlp_helper: NlpHelper, labels: list = None, names: list = None, resources_to_tasks: dict = None):
         self.labels = [] if labels is None else labels
         self.labels = [sanitize_label(label) for label in self.labels]
         self.names = [] if names is None else names
-        self.bert_parser = bert_parser
-        self.activities_to_parsed = {label: self.bert_parser.parse_label(label) for label in self.labels}
+        self.names = [sanitize_label(name) for name in self.names]
+        self.nlp_helper = nlp_helper
+        self.activities_to_parsed = {label: self.nlp_helper.parse_label(label) for label in self.labels}
         self.objects = list(
             set([x.main_object for x in self.activities_to_parsed.values() if not pd.isna(x.main_object) and
-                 x.main_object not in self.bert_parser.config.TERMS_FOR_MISSING]))
+                 x.main_object not in self.nlp_helper.config.TERMS_FOR_MISSING]))
         self.actions = list(
             set([x.main_action for x in self.activities_to_parsed.values() if not pd.isna(x.main_action) and
-                 x.main_action not in self.bert_parser.config.TERMS_FOR_MISSING]))
-        self.resources = [] if resources is None else resources
+                 x.main_action not in self.nlp_helper.config.TERMS_FOR_MISSING]))
+        self.resources_to_tasks = {} if resources_to_tasks is None else \
+            {sanitize_label(res): {sanitize_label(task) for task in tasks}
+             for res, tasks in resources_to_tasks.items()}

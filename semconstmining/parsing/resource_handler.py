@@ -1,6 +1,5 @@
 import logging
 import os
-import pickle
 import warnings
 from os.path import exists
 import pandas as pd
@@ -8,28 +7,18 @@ from tqdm import tqdm
 import json
 
 from semconstmining.parsing.actioncalssification import ActionClassifier
-from semconstmining.parsing.label_parser import BertTagger, label_utils
-from semconstmining.constraintmining.model.parsed_label import ParsedLabel, get_dummy
+from semconstmining.parsing.label_parser import nlp_helper
+from semconstmining.mining.model.parsed_label import ParsedLabel, get_dummy
 from semconstmining.parsing import parser
 from semconstmining.parsing import detector
 from semconstmining.parsing.components import Components
 from semconstmining.parsing.model_to_log import Model2LogConverter
+from semconstmining.util.io import read_pickle, write_pickle
 
 warnings.simplefilter('ignore')
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 _logger = logging.getLogger(__name__)
-
-
-def write_pickle(p_map, path):
-    with open(path, 'wb') as handle:
-        pickle.dump(p_map, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
-
-def read_pickle(path):
-    with open(path, 'rb') as handle:
-        p_map = pickle.load(handle)
-        return p_map
 
 
 class ResourceHandler:
@@ -38,10 +27,10 @@ class ResourceHandler:
     It is also responsible for the conversion of the models to logs.
     """
 
-    def __init__(self, config):
+    def __init__(self, config, nlp_helper):
         self.config = config
         self.data_parser = parser.BpmnModelParser(config)
-        self.bert_parser = BertTagger(config)
+        self.nlp_helper = nlp_helper
         self.model_to_log_converter = Model2LogConverter(config)
         self.elements_ser_file = config.DATA_INTERIM / (self.config.MODEL_COLLECTION + "_" + config.ELEMENTS_SER_FILE)
         self.models_ser_file = config.DATA_INTERIM / (self.config.MODEL_COLLECTION + "_" + config.MODELS_SER_FILE)
@@ -100,8 +89,8 @@ class ResourceHandler:
             lang = self.config.EN
         else:
             lang = t1_parse["lang"].values[0]
-        parsed = ParsedLabel(self.config, label, split, tags, self.bert_parser.find_objects(split, tags),
-                             self.bert_parser.find_actions(split, tags, lemmatize=True), lang,
+        parsed = ParsedLabel(self.config, label, split, tags, self.nlp_helper.find_objects(split, tags),
+                             self.nlp_helper.find_actions(split, tags, lemmatize=True), lang,
                              dictionary_entries=dicts, data_objects=d_objs)
         self.components.parsed_tasks[t1] = parsed
         return parsed
@@ -126,7 +115,7 @@ class ResourceHandler:
         else:
             self.bpmn_model_elements = self.data_parser.parse_model_elements()
             self.bpmn_model_elements[self.config.CLEANED_LABEL] = self.bpmn_model_elements[self.config.LABEL].apply(
-                lambda x: label_utils.sanitize_label(str(x or '')))
+                lambda x: nlp_helper.sanitize_label(str(x or '')))
             self.bpmn_model_elements.to_pickle(self.config.DATA_INTERIM / self.elements_ser_file)
         self.referenced_data_objects = set(self.bpmn_model_elements[self.config.DATA_OBJECT].explode().unique())
         _logger.info("There are " + str(len(self.referenced_data_objects)) + " referenced data objects.")
@@ -142,8 +131,8 @@ class ResourceHandler:
                 self.config.ELEMENT_ID_BACKUP].isin(self.referenced_data_objects)][self.config.LABEL].unique())
         else:
             return list(self.bpmn_model_elements[self.bpmn_model_elements[
-                self.config.ELEMENT_ID_BACKUP].isin(self.referenced_data_objects)
-                        & self.bpmn_model_elements[self.config.ELEMENT_ID_BACKUP].isin(ids)]
+                                                     self.config.ELEMENT_ID_BACKUP].isin(self.referenced_data_objects)
+                                                 & self.bpmn_model_elements[self.config.ELEMENT_ID_BACKUP].isin(ids)]
                         [self.config.LABEL].unique())
 
     def get_names_of_dictionary_entries(self, ids=None):
@@ -154,7 +143,7 @@ class ResourceHandler:
             return list(self.dictionary[self.dictionary[self.config.IS_REFERENCED]][self.config.NAME].unique())
         else:
             return list(self.dictionary[self.dictionary[self.config.IS_REFERENCED] & self.dictionary.index.isin(ids)]
-                 [self.config.NAME].unique())
+                        [self.config.NAME].unique())
 
     def load_bpmn_models(self):
         """
@@ -231,8 +220,8 @@ class ResourceHandler:
                 self.bpmn_model_elements[(self.bpmn_model_elements[self.config.ELEMENT_CATEGORY] == "Task")][
                     self.config.CLEANED_LABEL].unique())
             _logger.info(str(len(all_labs)) + " labels cleaned. " + "Start parsing.")
-            all_labs_split = [label_utils.split_label(lab) for lab in tqdm(all_labs)]
-            tagged = self.bert_parser.parse_labels(all_labs_split)
+            all_labs_split = [nlp_helper.split_label(lab) for lab in tqdm(all_labs)]
+            tagged = self.nlp_helper.parse_labels(all_labs_split)
             self.bpmn_task_labels = pd.DataFrame(
                 {self.config.CLEANED_LABEL: all_labs, self.config.SPLIT_LABEL: all_labs_split, "tags": tagged,
                  "lang": ["english" for _ in range(len(all_labs))]})
@@ -293,31 +282,32 @@ class ResourceHandler:
         return entries
 
     def handle_all_actions_and_objects(self):
-        for index, row in self.bpmn_model_elements[(~self.bpmn_model_elements[self.config.SPLIT_LABEL].isna())].iterrows():
+        for index, row in self.bpmn_model_elements[
+            (~self.bpmn_model_elements[self.config.SPLIT_LABEL].isna())].iterrows():
             if row[self.config.CLEANED_LABEL] in self.components.parsed_tasks:
                 parsed = self.components.parsed_tasks[row[self.config.CLEANED_LABEL]]
             else:
                 parsed = ParsedLabel(self.config, row[self.config.CLEANED_LABEL],
                                      row[self.config.SPLIT_LABEL], row[self.config.TAGS],
-                                     self.bert_parser.find_objects(row[self.config.SPLIT_LABEL],
-                                                                   row[self.config.TAGS]),
-                                     self.bert_parser.find_actions(row[self.config.SPLIT_LABEL],
-                                                                   row[self.config.TAGS],
-                                                                   lemmatize=True),
+                                     self.nlp_helper.find_objects(row[self.config.SPLIT_LABEL],
+                                                                              row[self.config.TAGS]),
+                                     self.nlp_helper.find_actions(row[self.config.SPLIT_LABEL],
+                                                                              row[self.config.TAGS],
+                                                                              lemmatize=True),
                                      row[self.config.LANG],
                                      [entry for entry in row[self.config.DICTIONARY]
                                       if entry not in self.config.TERMS_FOR_MISSING],
                                      [entry for entry in row[self.config.DATA_OBJECT]
                                       if entry not in self.config.TERMS_FOR_MISSING])
                 self.components.parsed_tasks[row[self.config.CLEANED_LABEL]] = parsed
-            self.components.all_actions.add(parsed.main_action)
-            self.components.all_objects.add(parsed.main_object)
+            self.components.add_action(row[self.config.MODEL_ID], parsed.main_action)
+            self.components.add_object(row[self.config.MODEL_ID], parsed.main_object)
         self.categorize_actions()
         _logger.info("Handled main components")
 
     def categorize_actions(self):
         action_classifier = ActionClassifier(self.config, self.components.all_actions,
-                                             self.bert_parser.label_util.glove_embeddings)
+                                             self.nlp_helper.glove_embeddings)
         self.components.action_to_category = action_classifier.classify_actions()
         for label in self.components.parsed_tasks:
             if label not in self.components.action_to_category:

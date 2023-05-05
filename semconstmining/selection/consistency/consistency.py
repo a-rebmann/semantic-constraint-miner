@@ -48,3 +48,6 @@ class ConsistencyChecker:
             return res
         else:
             return None
+
+    def make_set_consistent_max_relevance(self, recommended_constraints, inconsistent_subsets):
+        pass

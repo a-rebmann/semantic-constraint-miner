@@ -28,7 +28,8 @@ class DeclareChecker:
             , self.config.MULTI_OBJECT: self.check_multi_object_constraints()
             # Then we check the activity-level constraints
             , self.config.ACTIVITY: self.check_activity_level_constraints()
-
+            # Then we check the resource constraints
+            , self.config.RESOURCE: self.check_resource_level_constraints()
         }
         return res
 

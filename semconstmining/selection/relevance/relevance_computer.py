@@ -102,7 +102,7 @@ class RelevanceComputer:
                 combi = [(row[self.config.LEFT_OPERAND], ext)]
                 label_sims[self.config.LEFT_OPERAND][ext] = self.nlp_helper.get_sims(combi)[0]
         for ext in self.log_info.resources_to_tasks:
-            combi = [(row[self.config.RESOURCE], ext)]
+            combi = [(row[self.config.OBJECT], ext)]
             label_sims[self.config.RESOURCE][ext] = self.nlp_helper.get_sims(combi)[0]
         return label_sims
 

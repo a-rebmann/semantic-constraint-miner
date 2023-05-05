@@ -6,6 +6,7 @@ import pandas as pd
 from semconstmining.mining.extraction.declareextractor import DeclareExtractor
 from semconstmining.mining.extraction.modelextractor import ModelExtractor
 from semconstmining.parsing.resource_handler import ResourceHandler
+from semconstmining.parsing.label_parser.nlp_helper import sanitize_label
 
 _logger = logging.getLogger(__name__)
 
@@ -15,7 +16,7 @@ class ExtractionHandler:
     # Class for extracting observations from the model collection, which are in turn used to establish constraints
     """
 
-    def __init__(self, config,  resource_handler: ResourceHandler):
+    def __init__(self, config, resource_handler: ResourceHandler):
         self.config = config
         self._all_const = None
         self.resource_handler = resource_handler
@@ -23,9 +24,12 @@ class ExtractionHandler:
         self.declare_extractor = DeclareExtractor(config, resource_handler)
 
         # MP Constraints are not treated differently anymore
-        self.mp_observations_ser_file = self.config.DATA_INTERIM / (self.config.MODEL_COLLECTION + "_" + self.config.MP_OBSERVATIONS_SER_FILE)
-        self.declare_ser_file = self.config.DATA_INTERIM / (self.config.MODEL_COLLECTION + "_" + self.config.DECLARE_CONST)
-        self.constraint_kb_ser_file = self.config.DATA_INTERIM / (self.config.MODEL_COLLECTION + "_" + self.config.CONSTRAINT_KB_SER_FILE)
+        self.mp_observations_ser_file = self.config.DATA_INTERIM / (
+                self.config.MODEL_COLLECTION + "_" + self.config.MP_OBSERVATIONS_SER_FILE)
+        self.declare_ser_file = self.config.DATA_INTERIM / (
+                self.config.MODEL_COLLECTION + "_" + self.config.DECLARE_CONST)
+        self.constraint_kb_ser_file = self.config.DATA_INTERIM / (
+                self.config.MODEL_COLLECTION + "_" + self.config.CONSTRAINT_KB_SER_FILE)
 
         self.per_object_observations = None
         self.inter_object_observations = None
@@ -73,8 +77,10 @@ class ExtractionHandler:
             temp = pd.read_pickle(kb_path)
             return temp
         temp = self.get_all_observations().copy(deep=True)
+        temp = temp[temp.apply(lambda x: self.check_for_irrelevant_constraints(x), axis=1)]
         # We determine the support of the extracted observations and remove duplicate rows
-        temp[self.config.SUPPORT] = temp.groupby(self.config.CONSTRAINT_STR)[self.config.CONSTRAINT_STR].transform('count')
+        temp[self.config.SUPPORT] = temp.groupby(self.config.CONSTRAINT_STR)[self.config.CONSTRAINT_STR].transform(
+            'count')
         # Duplicates are determined based on
         # the constraint, the type of constraint, the model name, and the object type, if any
         temp = temp.drop_duplicates(subset=[self.config.CONSTRAINT_STR, self.config.LEVEL,
@@ -86,15 +92,21 @@ class ExtractionHandler:
             self.config.CONSTRAINT_STR)[self.config.MODEL_ID].transform(lambda x: ' | '.join(x))
         temp = temp.drop_duplicates(subset=[self.config.CONSTRAINT_STR, self.config.LEVEL, self.config.OBJECT])
         # We only retain constraints that have the minimum support
-        temp = temp[temp[self.config.SUPPORT] > min_support]
+        temp = temp[temp[self.config.SUPPORT] >= min_support]
         temp.to_pickle(kb_path)
         return temp
 
     def get_all_observations(self):
         if not self._all_const:
-            #dfs = [self.extract_declare_constraints_from_logs(),
+            # dfs = [self.extract_declare_constraints_from_logs(),
             # self.extract_observations_from_models()]
             # , eh.extract_observations_from_logs()
-            self._all_const = self.extract_declare_constraints_from_logs().set_index(["obs_id"])  # pd.concat(dfs).set_index(["obs_id"])
+            self._all_const = self.extract_declare_constraints_from_logs().set_index(
+                ["obs_id"])  # pd.concat(dfs).set_index(["obs_id"])
         return self._all_const
 
+    def check_for_irrelevant_constraints(self, x):
+        return (len(sanitize_label(x[self.config.LEFT_OPERAND])) > 2) and ((x[self.config.RIGHT_OPERAND] is None
+                                                                            or x[self.config.RIGHT_OPERAND] == "")
+                                                                           or (len(sanitize_label(
+                    x[self.config.RIGHT_OPERAND])) > 2))

@@ -75,8 +75,8 @@ class ConstraintFilter:
     def filter_based_on_resources(self, filtered_constraints):
         # TODO fix this
         return filtered_constraints[
-            (filtered_constraints[self.config.RESOURCE].isin(self.filter_config.resources) |
-                (filtered_constraints[self.config.RESOURCE].isnull()))
+            (filtered_constraints[self.config.OBJECT].isin(self.filter_config.resources) |
+                (filtered_constraints[self.config.OBJECT].isnull()))
         ]
 
     def filter_based_on_names(self, filtered_constraints):

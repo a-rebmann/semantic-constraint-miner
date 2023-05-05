@@ -117,10 +117,7 @@ def get_or_mine_constraints(config, resource_handler, min_support=2, dict_filter
                                      "_" + config.PREPROCESSED_CONSTRAINTS)):
         constraints = load_preprocessed(config, min_support, dict_filter, mark_redundant, with_nat_lang)
     else:
-        if min_support > 1:
-            constraints = eh.aggregate_constraints(min_support=min_support)
-        else:
-            constraints = eh.get_all_observations()
+        constraints = eh.aggregate_constraints(min_support=min_support)
         if dict_filter:
             dict_fil = DictionaryFilter(config, constraints)
             dict_fil.mark_natural_language_objects()
@@ -133,9 +130,8 @@ def get_or_mine_constraints(config, resource_handler, min_support=2, dict_filter
             subsumption_analyzer.check_refinement()
             subsumption_analyzer.check_subsumption()
             subsumption_analyzer.check_equal()
-            # translate the DECLARE constraints into LTL formulae
+            constraints = subsumption_analyzer.constraints
         constraints.reset_index(inplace=True)
-
         if with_nat_lang:
             constraints[config.NAT_LANG_TEMPLATE] = constraints[config.CONSTRAINT_STR].apply(
                 lambda x: nat_lang_templates[
@@ -151,7 +147,8 @@ def get_or_mine_constraints(config, resource_handler, min_support=2, dict_filter
                                       ~constraints[config.TEMPLATE].isin(to_ignore)))]
     constraints[config.LTL] = constraints.apply(
         lambda x: x[config.RECORD_ID] + " := " + to_ltl_str(x[config.CONSTRAINT_STR]) + ";", axis=1)
-    return constraints[~constraints[config.REDUNDANT]]
+    non_redundant = constraints[~constraints[config.REDUNDANT]]
+    return non_redundant
 
 
 def check_constraints(config, log_name, constraints, nlp_helper):
@@ -204,16 +201,20 @@ def get_context_sim_computer(config, constraints, nlp_helper, resource_handler, 
     contextual_similarity_computer.compute_object_based_contextual_dissimilarity()
     contextual_similarity_computer.compute_label_based_contextual_dissimilarity()
     contextual_similarity_computer.compute_name_based_contextual_dissimilarity()
+    _logger.info("Generality computed")
     store_preprocessed(config, constraints, min_support, dict_filter, mark_redundant, with_nat_lang)
     return contextual_similarity_computer
 
 
-def compute_relevance_for_log(config, constraints, nlp_helper, resource_handler, process):
+def compute_relevance_for_log(config, constraints, nlp_helper, resource_handler, process, pd_log=None):
     lh = LogHandler(config)
-    pd_log = lh.read_log(config.DATA_LOGS, process)
     if pd_log is None:
-        _logger.info("No log found for process " + process)
-        return None
+        pd_log = lh.read_log(config.DATA_LOGS, process)
+        if pd_log is None:
+            _logger.info("No log found for process " + process)
+            return None
+    else:
+        lh.log = pd_log
     labels = list(pd_log[config.XES_NAME].unique())
     resources_to_tasks = lh.get_resources_to_tasks()
     log_info = LogInfo(nlp_helper, labels, [process], resources_to_tasks)
@@ -224,12 +225,15 @@ def compute_relevance_for_log(config, constraints, nlp_helper, resource_handler,
     return constraints
 
 
-def recommend_constraints_for_log(config, rec_config, constraints, nlp_helper, process):
+def recommend_constraints_for_log(config, rec_config, constraints, nlp_helper, process, pd_log=None):
     lh = LogHandler(config)
-    pd_log = lh.read_log(config.DATA_LOGS, process)
     if pd_log is None:
-        _logger.info("No log found for process " + process)
-        return None
+        pd_log = lh.read_log(config.DATA_LOGS, process)
+        if pd_log is None:
+            _logger.info("No log found for process " + process)
+            return None
+    else:
+        lh.log = pd_log
     labels = list(pd_log[config.XES_NAME].unique())
     log_info = LogInfo(nlp_helper, labels, [process])
     recommender = ConstraintRecommender(config, rec_config, log_info)
@@ -246,7 +250,7 @@ def run_full_extraction_pipeline(config: Config, process: str, filter_config: Fi
     nlp_helper = NlpHelper(config)
     resource_handler = get_resource_handler(config, nlp_helper)
     all_constraints = get_or_mine_constraints(config, resource_handler)
-    contextual_similarity_computer = get_context_sim_computer(config, all_constraints, nlp_helper, resource_handler)
+    get_context_sim_computer(config, all_constraints, nlp_helper, resource_handler)
     # Filter constraints (optional)
     const_filter = ConstraintFilter(config, filter_config, resource_handler)
     filtered_constraints = const_filter.filter_constraints(all_constraints)

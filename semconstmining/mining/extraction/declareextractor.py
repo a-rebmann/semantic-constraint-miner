@@ -86,9 +86,9 @@ class DeclareExtractor:
         :return: a pandas dataframe with extracted DECLARE constraints
         """
         _logger.info("Extracting DECLARE constraints from played-out logs")
-        #Discover regular declare constraints
+        # Discover regular declare constraints
         dfs_reg = [self.discover_declare_constraints(t) for t in
-                    self.resource_handler.bpmn_logs.reset_index().itertuples()]
+                   self.resource_handler.bpmn_logs.reset_index().itertuples()]
 
         # Discover action based constraints per object
         dfs_obj = [self.discover_object_based_declare_constraints(t) for t in
@@ -102,7 +102,18 @@ class DeclareExtractor:
                dfs_reg +  # regular declare constraints
                dfs_obj +  # object based constraints
                dfs_multi_obj  # multi-object constraints
-               if df is not None]
+               if df is not None and len(df) > 0]
+        if len(dfs) == 0:
+            return pd.DataFrame(columns=[self.config.RECORD_ID,
+                                         self.config.LEVEL,
+                                         self.config.OBJECT,
+                                         self.config.CONSTRAINT_STR,
+                                         self.config.OPERATOR_TYPE,
+                                         self.config.LEFT_OPERAND,
+                                         self.config.RIGHT_OPERAND,
+                                         self.config.DICTIONARY,
+                                         self.config.DATA_OBJECT,
+                                         self.config.TEMPLATE])
         new_df = pd.concat(dfs).astype({self.config.LEVEL: "category"})
         return new_df
 
@@ -114,11 +125,11 @@ class DeclareExtractor:
         res = set()
         d4py = Declare(self.config)
         d4py.log = self.object_log_projection(filtered_traces)
-        d4py.compute_frequent_itemsets(min_support=0.99, len_itemset=2)
-        d4py.discovery(consider_vacuity=False, max_declare_cardinality=2, do_unary=False)
-        individual_res, associations = d4py.filter_discovery(min_support=0.99)
+        d4py.compute_frequent_itemsets(min_support=0.0, len_itemset=2, algorithm="apriori")
+        d4py.discovery(consider_vacuity=True, max_declare_cardinality=2, do_unary=False)
+        individual_res, associations = d4py.filter_discovery(min_support=self.config.DECLARE_SUPPORT)
         if any(len(y) > 0 for val in associations.values() for x in val.values() for y in x):
-            #_logger.info(associations)
+            # _logger.info(associations)
             pass
         res.update(const for const, checker_results in individual_res.items()
                    if "[]" not in const and "[none]" not in const
@@ -143,18 +154,20 @@ class DeclareExtractor:
         for bo in bos:
             d4py = Declare(self.config)
             d4py.log = self.object_action_log_projection(bo, filtered_traces)
-            d4py.compute_frequent_itemsets(min_support=0.99, len_itemset=2)
-            individual_res, associations = d4py.discovery(consider_vacuity=False, max_declare_cardinality=2)
-            # individual_res, associations = d4py.filter_discovery(min_support=0.99)
+            d4py.compute_frequent_itemsets(min_support=0.0, len_itemset=2, algorithm="apriori")
+            individual_res, associations = d4py.discovery(consider_vacuity=True, max_declare_cardinality=2)
+            d4py.filter_discovery(min_support=self.config.DECLARE_SUPPORT)
             # print(individual_res)
             if bo not in res:
                 res[bo] = set()
             res[bo].update(const for const, checker_results in individual_res.items() if "[]" not in const
                            and "[none]" not in const
-                           and ''.join([i for i in const.split("[")[0] if not i.isdigit()]) not in self.config.CONSTRAINT_TYPES_TO_IGNORE)
+                           and ''.join(
+                [i for i in const.split("[")[0] if not i.isdigit()]) not in self.config.CONSTRAINT_TYPES_TO_IGNORE)
             all_associations[bo] = associations
         return (
-            pd.DataFrame.from_records(self.get_object_constraints_flat(res, all_associations)).assign(model_id=row_tuple.model_id).assign(
+            pd.DataFrame.from_records(self.get_object_constraints_flat(res, all_associations)).assign(
+                model_id=row_tuple.model_id).assign(
                 model_name=row_tuple.name)
         )
 
@@ -165,14 +178,16 @@ class DeclareExtractor:
         parsed_tasks = self.get_parsed_tasks(row_tuple.log, resource_handler=self.resource_handler)
         filtered_traces = self.get_filtered_traces(row_tuple.log, parsed_tasks=parsed_tasks, with_loops=True)
         d4py.log = self.clean_log_projection(filtered_traces)
-        d4py.compute_frequent_itemsets(min_support=0.99, len_itemset=2)
-        d4py.discovery(consider_vacuity=False, max_declare_cardinality=2)
-        individual_res, associations = d4py.filter_discovery(min_support=0.99)
+        d4py.compute_frequent_itemsets(min_support=0.0, len_itemset=2, algorithm="apriori")
+        d4py.discovery(consider_vacuity=True, max_declare_cardinality=2)
+        individual_res, associations = d4py.filter_discovery(min_support=self.config.DECLARE_SUPPORT)
         res = {const for const, checker_results in individual_res.items() if "[]" not in const
                and "[none]" not in const
-               and ''.join([i for i in const.split("[")[0] if not i.isdigit()]) not in self.config.CONSTRAINT_TYPES_TO_IGNORE}
+               and ''.join(
+            [i for i in const.split("[")[0] if not i.isdigit()]) not in self.config.CONSTRAINT_TYPES_TO_IGNORE}
         return (
-            pd.DataFrame.from_records(self.get_constraints_flat(res, associations)).assign(model_id=row_tuple.model_id).assign(
+            pd.DataFrame.from_records(self.get_constraints_flat(res, associations)).assign(
+                model_id=row_tuple.model_id).assign(
                 model_name=row_tuple.name)
         )
 
@@ -303,4 +318,3 @@ class DeclareExtractor:
                 rec[self.config.LEFT_OPERAND] = ops[0].strip()
                 rec[self.config.RIGHT_OPERAND] = ops[1].strip()
         return res
-

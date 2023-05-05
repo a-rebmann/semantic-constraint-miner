@@ -129,9 +129,9 @@ class BpmnModelParser:
         follows = {}
         labels = {}
         for e in l:
-            labels[model_id+str(e)] = l[e]
+            labels[str(model_id)+str(e)] = l[e]
         for e in f:
-            follows[model_id+str(e)] = [model_id+str(e) for e in f[e]]
+            follows[str(model_id)+str(e)] = [str(model_id)+str(e) for e in f[e]]
         stack = deque([model_dict])
         data_object_relations = _traverse_and_extract_data_object_relations(follows, labels)
         while len(stack) > 0:
@@ -143,7 +143,7 @@ class BpmnModelParser:
             # don't append root as element
             if element["resourceId"] == model_dict["resourceId"]:
                 continue
-            element_id = model_id + str(element["resourceId"])
+            element_id = str(model_id) + str(element["resourceId"])
             # NOTE: it's possible to add other attributes here, such as the bounds of an element
             record = {
                 self.config.ELEMENT_ID: element_id,

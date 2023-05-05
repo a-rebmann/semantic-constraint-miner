@@ -76,4 +76,4 @@ class ContextualSimilarityComputer:
                 continue
             unique_combinations = [(a, b) for idx, a in enumerate(concat_labels) for b in concat_labels[idx + 1:]]
             sims = self.nlp_helper.get_sims(unique_combinations)
-            self.constraints.at[idx, self.config.LABEL_BASED_GENERALITY] = 1 - mode(sims)
+            self.constraints.at[idx, self.config.OBJECT_BASED_GENERALITY] = 1 - mode(sims)

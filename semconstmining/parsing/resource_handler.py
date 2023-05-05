@@ -296,9 +296,11 @@ class ResourceHandler:
                                                                               lemmatize=True),
                                      row[self.config.LANG],
                                      [entry for entry in row[self.config.DICTIONARY]
-                                      if entry not in self.config.TERMS_FOR_MISSING],
+                                      if entry not in self.config.TERMS_FOR_MISSING]
+                                     if row[self.config.DICTIONARY] is not None else [],
                                      [entry for entry in row[self.config.DATA_OBJECT]
-                                      if entry not in self.config.TERMS_FOR_MISSING])
+                                      if entry not in self.config.TERMS_FOR_MISSING]
+                                     if row[self.config.DATA_OBJECT] is not None else [])
                 self.components.parsed_tasks[row[self.config.CLEANED_LABEL]] = parsed
             self.components.add_action(row[self.config.MODEL_ID], parsed.main_action)
             self.components.add_object(row[self.config.MODEL_ID], parsed.main_object)

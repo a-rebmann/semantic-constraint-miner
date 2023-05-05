@@ -11,6 +11,7 @@ import pandas as pd
 from mlxtend.preprocessing import TransactionEncoder
 from mlxtend.frequent_patterns import fpgrowth, apriori
 from itertools import product
+from itertools import combinations
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 
@@ -162,6 +163,21 @@ class Declare:
             raise RuntimeError("You must load a log before.")
         if not 0 <= min_support <= 1:
             raise RuntimeError("Min. support must be in range [0, 1].")
+        if min_support == 0:
+            # Calculate all unique item sets up to length 2
+            lst = self.activities_log_projection() if dimension == 'act' else self.resources_log_projection()
+            lst = list(set([item for sublist in lst for item in sublist]))
+            unique_item_sets = set()
+            for i in range(1, len_itemset+1):  # range up to length
+                for combo in combinations(lst, i):
+                    unique_item_sets.add(frozenset(combo))
+            # Convert set to list and create pandas Series
+            series = pd.Series(list(unique_item_sets))
+            self.frequent_item_sets = pd.DataFrame({'itemsets': series})
+            self.frequent_item_sets['support'] = -1
+            self.frequent_item_sets['length'] = self.frequent_item_sets['itemsets'].apply(lambda x: len(x))
+            return
+            # calculate all item sets up to the given length
 
         self.log_encoding(dimension)
         if algorithm == 'fpgrowth':
@@ -408,6 +424,8 @@ class Declare:
             length = len(item_set)
             if do_unary and length == 1:
                 for templ in Template.get_unary_templates():
+                    if templ.templ_str in self.config.CONSTRAINT_TYPES_TO_IGNORE:
+                        continue
                     constraint = {"template": templ, "activities": list(item_set), "condition": ("", "")}
                     if not templ.supports_cardinality:
                         self.discovery_results |= discover_constraint(self.log, constraint, consider_vacuity)
@@ -418,6 +436,8 @@ class Declare:
 
             elif length == 2:
                 for templ in Template.get_binary_templates():
+                    if templ.templ_str in self.config.CONSTRAINT_TYPES_TO_IGNORE:
+                        continue
                     constraint = {"template": templ, "activities": list(item_set), "condition": ("", "", "")}
                     self.discovery_results |= discover_constraint(self.log, constraint, consider_vacuity)
 

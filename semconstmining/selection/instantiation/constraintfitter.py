@@ -94,21 +94,21 @@ class ConstraintFitter:
     def fit_multi_object_or_activity_constraint(self, row, sim_threshold):
         sim_dict = row[self.config.INDIVIDUAL_RELEVANCE_SCORES]
         fitted_constraints = []
-        if self.config.LEFT_OPERAND:
+        if self.config.LEFT_OPERAND in sim_dict:
             obj_sim = sim_dict[self.config.LEFT_OPERAND]
             for obj, sim in obj_sim.items():
                 if sim >= sim_threshold:
                     record = self.instantiate_multi_obj_or_act_constraint(row, obj, None)
                     if record is not None:
                         fitted_constraints.append(record)
-        if self.config.RIGHT_OPERAND:
+        if self.config.RIGHT_OPERAND in sim_dict:
             obj_sim_r = sim_dict[self.config.RIGHT_OPERAND]
             for obj, sim in obj_sim_r.items():
                 if sim >= sim_threshold:
                     record = self.instantiate_multi_obj_or_act_constraint(row, None, obj)
                     if record is not None:
                         fitted_constraints.append(record)
-        if self.config.LEFT_OPERAND and self.config.RIGHT_OPERAND:
+        if self.config.LEFT_OPERAND in sim_dict and self.config.RIGHT_OPERAND in sim_dict:
             obj_sim_l = sim_dict[self.config.LEFT_OPERAND]
             obj_sim_r = sim_dict[self.config.RIGHT_OPERAND]
             for obj_l, sim_l in obj_sim_l.items():

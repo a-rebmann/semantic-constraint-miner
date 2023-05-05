@@ -34,6 +34,7 @@ def sanitize_label(label):
         label = label.replace("&", "and")
     label = label.replace('\n', ' ').replace('\r', '')
     label = label.replace('(s)', 's')
+    label = label.replace("'", "")
     label = re.sub(' +', ' ', label)
     # turn any non-alphanumeric characters into whitespace
     # label = re.sub("[^A-Za-z]"," ",label)
@@ -217,8 +218,10 @@ class NlpHelper:
         # Compute embedding for both lists
         sims = []
         if len(sentences1) > 0:
-            embeddings1 = [self.known_embeddings[sent] for sent in sentences1]
-            embeddings2 = [self.known_embeddings[sent] for sent in sentences2]
+            embeddings1 = [self.known_embeddings[sent] if sent in self.known_embeddings else
+                           self.sent_model.encode(sent, convert_to_tensor=True) for sent in sentences1]
+            embeddings2 = [self.known_embeddings[sent] if sent in self.known_embeddings else
+                           self.sent_model.encode(sent, convert_to_tensor=True) for sent in sentences2]
             # Compute cosine-similarities
             cosine_scores = [float(util.cos_sim(embedding1, embedding2)) for embedding1, embedding2 in
                              zip(embeddings1, embeddings2)]
@@ -232,7 +235,7 @@ class NlpHelper:
         model_ids = [x.strip() for x in row[self.config.MODEL_ID].split("|")]
         concat_labels = list(
             resource_handler.bpmn_model_elements[
-                resource_handler.bpmn_model_elements[self.config.MODEL_ID].isin(model_ids)][self.config.CLEANED_LABEL].unique()
+                resource_handler.bpmn_model_elements[self.config.MODEL_ID].astype(str).isin(model_ids)][self.config.CLEANED_LABEL].unique()
         )
         # Computing semantic similarity using sentence transformers is super expensive on CPU, therefore,
         # we randomly pick k names for which we make comparisons TODO any way to ground this procedure on something?
@@ -256,7 +259,7 @@ class NlpHelper:
         concat_objects = set()
         for model_id in model_ids:
             if model_id in resource_handler.components.all_objects_per_model:
-                concat_objects.update(resource_handler.components.all_objects_per_model[model_id])
+                concat_objects.update(resource_handler.components.all_objects_per_model[str(model_id)])
         concat_objects = list(concat_objects)
         if len(concat_objects) > 10:
             concat_objects = concat_objects[:5] + concat_objects[-5:]

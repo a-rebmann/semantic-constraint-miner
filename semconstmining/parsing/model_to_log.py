@@ -4,12 +4,13 @@ import logging
 import os
 import signal
 import time
+from copy import deepcopy
 from os.path import exists
 
 import pm4py
 from pm4py.algo.analysis.woflan import algorithm as woflan
 from pm4py.algo.simulation.playout.petri_net.algorithm import Variants
-from pm4py.objects.log.obj import EventLog
+from pm4py.objects.log.obj import EventLog, Trace
 import pandas as pd
 import numpy as np
 from func_timeout import func_timeout, FunctionTimedOut
@@ -49,7 +50,10 @@ class Model2LogConverter:
         df_petri["sound"] = False
         df_petri["log"] = None
         df_results = []
-        split_df = np.array_split(df_petri, 100)
+        if len(df_petri) > 1000:
+            split_df = np.array_split(df_petri, 100)
+        else:
+            split_df = [df_petri]
         start = time.time()
         for i, df in enumerate(split_df):
             file_name = "no_" + str(i) + self.config.LOGS_SER_FILE
@@ -69,7 +73,7 @@ class Model2LogConverter:
 
     def soundness_check(self, row):
         if row.pn:
-            _logger.info("Soundness check. " + row.model_id + "; Number " + str(self.done))
+            _logger.info("Soundness check. " + str(row.model_id) + "; Number " + str(self.done))
             net, im, fm = row.pn
             start = time.time()
             try:
@@ -77,7 +81,7 @@ class Model2LogConverter:
                                    args=(net, im, fm, {woflan.Parameters.RETURN_ASAP_WHEN_NOT_SOUND: True,
                                                        woflan.Parameters.PRINT_DIAGNOSTICS: False,
                                                        woflan.Parameters.RETURN_DIAGNOSTICS: False}))
-                _logger.info("Result: " + row.model_id + " sound? " + str(res))
+                _logger.info("Result: " + str(row.model_id) + " sound? " + str(res))
             except FunctionTimedOut as ex:
                 _logger.warning("Time out during soundness checking.")
                 res = False
@@ -91,7 +95,7 @@ class Model2LogConverter:
                 stop = time.time()
                 completed_in = round(stop - start, 2)
                 if completed_in > 2 * self.config.TIMEOUT:
-                    _logger.error("Timeout not working!! " + row.model_id)
+                    _logger.error("Timeout not working!! " + str(row.model_id))
             self.done += 1
             if self.done % 5000 == 0:
                 _logger.info("Collect garbage...")
@@ -111,7 +115,7 @@ class Model2LogConverter:
         names = []
         for row in df_bpmn.reset_index().itertuples():
             # add the id and name of the model to the new frame for future reference
-            ids.append(row.model_id)
+            ids.append(str(row.model_id))
             names.append(row.name)
             json_str = _get_json_from_row(row)
             try:
@@ -119,22 +123,22 @@ class Model2LogConverter:
                 follows_ = {}
                 labels_ = {}
                 for e in l:
-                    labels_[row.model_id + str(e)] = l[e]
+                    labels_[str(row.model_id) + str(e)] = l[e]
                 for e in f:
-                    follows_[row.model_id + str(e)] = [row.model_id + str(e) for e in f[e]]
+                    follows_[str(row.model_id) + str(e)] = [str(row.model_id) + str(e) for e in f[e]]
                 net, initial_marking, final_marking = self.converter.convert_from_parsed(follows_, labels_)
                 follows.append(follows_)
                 labels.append(labels_)
                 pns.append((net, initial_marking, final_marking))
                 success += 1
-            except KeyError:
-                _logger.debug("Error during conversion from bpmn to Petri net.")
+            except KeyError as ke:
+                _logger.info("Error during conversion from bpmn to Petri net." + str(ke))
                 pns.append(None)
                 follows.append(None)
                 labels.append(None)
                 failed += 1
             except Exception as ex:
-                _logger.debug("Error during conversion from bpmn to Petri net." + str(ex))
+                _logger.info("Error during conversion from bpmn to Petri net." + str(ex))
                 pns.append(None)
                 follows.append(None)
                 labels.append(None)
@@ -148,9 +152,13 @@ class Model2LogConverter:
         seen = set()
         already_counted_loop = False
         for trace in log:
-            trace_labels = tuple([x["concept:name"] for x in trace])
+            trace_labels = tuple([x["concept:name"] for x in trace if x["concept:name"] != ""])
             if trace_labels not in seen:
-                variant_log.append(trace)
+                trace_cpy = Trace()
+                for event in trace:
+                    if event["concept:name"] != "":
+                        trace_cpy.append(event)
+                variant_log.append(trace_cpy)
                 seen.add(trace_labels)
                 if 0 < len(trace_labels) == len(set(trace_labels)) and not already_counted_loop:
                     self.loop_counter += 1
@@ -158,7 +166,6 @@ class Model2LogConverter:
         return variant_log
 
     def log_creation_check(self, row, model_elements):
-        # _logger.info("Log creation. " + row.model_id)
         played_out_log = None
         if row.sound:
             start = time.time()
@@ -167,6 +174,7 @@ class Model2LogConverter:
             try:
                 net, im, fm = row.pn
                 log = pm4py.play_out(net, im, fm, variant=Variants.EXTENSIVE)
+                played_out_log = self.replace_attributes(log, model_elements)
                 variant_log = self.create_variant_log(log)
                 if not self.config.LOOPS:
                     played_out_log = create_log_without_loops(variant_log)
@@ -181,8 +189,6 @@ class Model2LogConverter:
                 completed_in = round(stop - start, 2)
                 if completed_in > 1.5 * self.config.TIMEOUT:
                     _logger.error("Timeout not working!!")
-        if played_out_log is not None:
-            played_out_log = self.replace_attributes(played_out_log, model_elements)
         return played_out_log
 
     def replace_attributes(self, played_out_log, model_elements):

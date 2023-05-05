@@ -8,14 +8,18 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from pm4py.objects.log.obj import Trace, Event, EventLog
-from tqdm import tqdm
+import pm4py
 
 from semconstmining.config import Config
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import KFold
 
+from semconstmining.main import get_resource_handler, get_or_mine_constraints, get_context_sim_computer, \
+    compute_relevance_for_log, recommend_constraints_for_log, check_constraints
 from semconstmining.mining.extraction.modelextractor import ModelExtractor
 from semconstmining.parsing.label_parser.nlp_helper import NlpHelper
 from semconstmining.parsing.resource_handler import ResourceHandler
+from semconstmining.selection.consistency.consistency import ConsistencyChecker
+from semconstmining.selection.instantiation.constraintfilter import ConstraintFilter
 from semconstmining.selection.instantiation.filter_config import FilterConfig
 from semconstmining.selection.instantiation.recommendation_config import RecommendationConfig
 
@@ -31,11 +35,9 @@ eval_configurations = [
      FilterConfig(config=conf))
 ]
 
-LOG_SIZE = 1000
+LOG_SIZE = 100
 NOISY_TRACE_PROB = 0.3
 NOISY_EVENT_PROB = 0.3
-
-TRAIN_TEST_SPLIT = 0.7
 
 
 # TODO add attribute to event log to indicate whether it is noisy or not + type of noise
@@ -53,6 +55,7 @@ def _remove_event(trace: Trace):
     for i in range(0, len(trace)):
         if i != del_index:
             trace2.append(trace[i])
+    trace2.attributes[conf.VIOLATION_TYPE] = 0
     return trace2
 
 
@@ -61,7 +64,9 @@ def _insert_event(trace: Trace, tasks):
     task = random.choice(list(tasks))
     e = Event()
     e["concept:name"] = task
+    e[conf.VIOLATION_TYPE] = 1
     trace.insert(ins_index, e)
+    trace.attributes[conf.VIOLATION_TYPE] = 1
     return trace
 
 
@@ -80,6 +85,7 @@ def _swap_events(trace: Trace):
             trace2.append(trace[index1])
         else:
             trace2.append(trace[i])
+    trace2.attributes[conf.VIOLATION_TYPE] = 2
     return trace2
 
 
@@ -95,6 +101,8 @@ def _swap_resources(trace: Trace, resources: dict):
         return trace
     resource = random.choice(list(resources_to_pick_from))
     e[conf.XES_ROLE] = resource
+    e[conf.VIOLATION_TYPE] = 3
+    trace.attributes[conf.VIOLATION_TYPE] = 3
     return trace
 
 
@@ -158,16 +166,7 @@ def add_role_info(row, resource_handler):
     return log
 
 
-def load_or_generate_logs_from_sap_sam():
-    # Load the models and generate the logs
-    nlp_helper = NlpHelper(conf)
-    resource_handler = ResourceHandler(conf, nlp_helper)
-    resource_handler.load_bpmn_model_elements()
-    resource_handler.load_dictionary_if_exists()
-    resource_handler.determine_model_languages()
-    resource_handler.filter_only_english()
-    resource_handler.load_bpmn_models()
-    resource_handler.get_logs_for_sound_models()
+def load_or_generate_logs_from_sap_sam(resource_handler):
     logs = resource_handler.bpmn_logs[resource_handler.bpmn_logs[conf.LOG].notna()]
     logs = logs[logs.apply(lambda row: len(row[conf.LOG]) > 0, axis=1)]
     # We do the following to get the task to role mapping
@@ -180,34 +179,76 @@ def load_or_generate_logs_from_sap_sam():
     for i, df in enumerate(split_df):
         file_name = "sap_sam_noisy_" + str(i) + ".pkl"
         if exists(conf.DATA_EVAL / file_name):
-            noisy_logs = pd.read_pickle(conf.DATA_EVAL / file_name)
+            df = pd.read_pickle(conf.DATA_EVAL / file_name)
         else:
             # Now we expand and add noise to the logs
-            noisy_logs = df.apply(lambda row: insert_noise(row, NOISY_TRACE_PROB,
+            df[conf.LOG] = df.apply(lambda row: insert_noise(row, NOISY_TRACE_PROB,
                                                            NOISY_EVENT_PROB, LOG_SIZE,
                                                            resource_handler), axis=1)
-            noisy_logs.to_pickle(conf.DATA_EVAL / file_name)
+            df.to_pickle(conf.DATA_EVAL / file_name)
             _logger.info(f"Saved noisy logs to {conf.DATA_EVAL / file_name}")
-        df_results.append(noisy_logs)
+        df_results.append(df)
     stop = time.time()
     completed_in = round(stop - start, 2)
     _logger.info(f"Completed in {completed_in} seconds")
-    # noisy_logs = pd.concat(df_results)
+    noisy_logs = pd.concat(df_results)
     # Now we store the noisy logs
     # noisy_logs.to_pickle(conf.DATA_INTERIM / "sap_sam_noisy.pkl")
-    # Now we split the logs into train and test
-    log_ids = list(resource_handler.bpmn_logs[resource_handler.bpmn_logs[conf.LOG].notna()][conf.MODEL_ID].unique())
-    _logger.info(f"Unique model ids: {len(log_ids)}")
-    train_ids, test_ids = train_test_split(log_ids, train_size=TRAIN_TEST_SPLIT, random_state=42)
-    _logger.info(f"Train ids: {len(train_ids)}")
-    _logger.info(f"Test ids: {len(test_ids)}")
+    return noisy_logs
 
 
-def run_configurations():
-    pass
+def evaluate_single_run(log_row, violations):
+    for violation in violations:
+        pass
+
+
+def run_configuration(constraints, logs):
+    eval_results = []
+    for idx, log_row in logs.iterrows():
+        # Log-specific constraint recommendation
+        name = resource_handler.bpmn_models.loc[log_row[conf.MODEL_ID]][conf.NAME]
+        log = pm4py.convert_to_dataframe(log_row[conf.LOG])
+        constraints = compute_relevance_for_log(conf, constraints, nlp_helper, resource_handler, name, log)
+        recommended_constraints = recommend_constraints_for_log(conf, rec_config, constraints, nlp_helper, name, log)
+        consistency_checker = ConsistencyChecker(conf)
+        inconsistent_subsets = consistency_checker.check_consistency(recommended_constraints)
+        if len(inconsistent_subsets) > 0:
+            consistent_recommended_constraints = consistency_checker.make_set_consistent_max_relevance(recommended_constraints,
+                                                                                                       inconsistent_subsets)
+        else:
+            consistent_recommended_constraints = recommended_constraints
+        violations = check_constraints(conf, log_row[conf.NAME], consistent_recommended_constraints, nlp_helper)
+        eval_result = evaluate_single_run(log_row, violations)
+        eval_results.append(eval_result)
+    return eval_results
 
 
 if __name__ == '__main__':
-    load_or_generate_logs_from_sap_sam()
-
-    # run_configurations()
+    _logger.info("Loading data")
+    nlp_helper = NlpHelper(conf)
+    resource_handler = get_resource_handler(conf, nlp_helper)
+    _logger.info("Loading constraints")
+    all_constraints = get_or_mine_constraints(conf, resource_handler)
+    _logger.info("Loading generality scores")
+    get_context_sim_computer(conf, all_constraints, nlp_helper, resource_handler)
+    _logger.info("Loading logs")
+    noisy_logs = load_or_generate_logs_from_sap_sam(resource_handler)
+    _logger.info("Loaded logs")
+    # Now we split the logs into train and test
+    log_ids = list(noisy_logs[conf.MODEL_ID].unique())
+    log_ids = log_ids[:100] # TODO: Remove this
+    _logger.info(f"Unique model ids: {len(log_ids)}")
+    _logger.info("Starting evaluation")
+    kf = KFold(n_splits=5, shuffle=True, random_state=42)
+    for fold, (train_idx, test_idx) in enumerate(kf.split(log_ids)):
+        train_ids = [log_ids[i] for i in train_idx]
+        test_ids = [log_ids[i] for i in test_idx]
+        _logger.info(f"Starting fold {fold}")
+        train_constraints = all_constraints[all_constraints[conf.MODEL_ID].isin(train_ids)]
+        fold_test_logs = noisy_logs[noisy_logs[conf.MODEL_ID].isin(test_ids)]
+        for eval_config in eval_configurations:
+            rec_config = eval_config[0]
+            filt_config = eval_config[1]
+            const_filter = ConstraintFilter(conf, filt_config, resource_handler)
+            filtered_constraints = const_filter.filter_constraints(train_constraints)
+            run_configuration(filtered_constraints, fold_test_logs)

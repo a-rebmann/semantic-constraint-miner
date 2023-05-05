@@ -146,7 +146,18 @@ class ModelExtractor:
     def get_perspectives_from_models(self):
         dfs = [self._get_observations_from_model(t, self.config.CONSTRAINT_TYPES_TO_IGNORE)
                for t in self.resource_handler.bpmn_models.reset_index().itertuples()]
-        dfs = [df for df in dfs if df is not None]
+        dfs = [df for df in dfs if df is not None and len(df) > 0]
+        if len(dfs) == 0:
+            return pd.DataFrame(columns=[self.config.RECORD_ID,
+                                         self.config.LEVEL,
+                                         self.config.OBJECT,
+                                         self.config.CONSTRAINT_STR,
+                                         self.config.OPERATOR_TYPE,
+                                         self.config.LEFT_OPERAND,
+                                         self.config.RIGHT_OPERAND,
+                                         self.config.DICTIONARY,
+                                         self.config.DATA_OBJECT,
+                                         self.config.TEMPLATE])
         return pd.concat(dfs).astype({self.config.LEVEL: "category"})  # .set_index([RECORD_ID])
 
     def _get_observations_from_model(self, row_tuple, types_to_ignore):
@@ -180,11 +191,13 @@ class ModelExtractor:
                     if shape_id in lane_info["tasks"]:
                         lan_str = nlp_helper.sanitize_label(lane_info["name"])
                         task_str = nlp_helper.sanitize_label(label)
-                        if lan_str == 'lane' or lan_str in self.config.TERMS_FOR_MISSING or task_str in self.config.TERMS_FOR_MISSING:
+                        if lan_str == 'lane' or lan_str in self.config.TERMS_FOR_MISSING or task_str in \
+                                self.config.TERMS_FOR_MISSING:
                             continue
                         observation = (task_str, lan_str,
-                                       _create_mp_declare_const_with_role_condition(task_str, lan_str), self.config.RESOURCE, self.config.UNARY,
-                                       "")
+                                       _create_mp_declare_const_with_role_condition(task_str, lan_str),
+                                       self.config.RESOURCE, self.config.UNARY,
+                                       lan_str)
                         observations.append(observation)
                         self.resource_handler.components.add_resource(model_id, lan_str)
                         self.resource_handler.components.add_task_to_resource(model_id, task_str, lan_str)
@@ -193,12 +206,14 @@ class ModelExtractor:
                     if shape_id in pool_info["tasks"]:
                         pool_str = nlp_helper.sanitize_label(pool_info["name"])
                         task_str = nlp_helper.sanitize_label(label)
-                        if pool_str == 'pool' or pool_str in self.config.TERMS_FOR_MISSING or task_str in self.config.TERMS_FOR_MISSING:
+                        if pool_str == 'pool' or pool_str in self.config.TERMS_FOR_MISSING or task_str in \
+                                self.config.TERMS_FOR_MISSING:
                             continue
                         observation = (task_str, pool_str,
-                                       _create_mp_declare_const_with_role_condition(task_str, pool_str), self.config.RESOURCE,
+                                       _create_mp_declare_const_with_role_condition(task_str, pool_str),
+                                       self.config.RESOURCE,
                                        self.config.UNARY,
-                                       "")
+                                       pool_str)
                         observations.append(observation)
                         self.resource_handler.components.add_task_to_resource(model_id, task_str, pool_str)
 
@@ -209,7 +224,8 @@ class ModelExtractor:
                     if shape_id in lanes:
                         pool_str = nlp_helper.sanitize_label(pool_info["name"])
                         task_str = nlp_helper.sanitize_label(label)
-                        if pool_str == 'pool' or pool_str in self.config.TERMS_FOR_MISSING or task_str in self.config.TERMS_FOR_MISSING:
+                        if pool_str == 'pool' or pool_str in self.config.TERMS_FOR_MISSING or task_str in \
+                                self.config.TERMS_FOR_MISSING:
                             continue
                         observation = (pool_str, task_str,
                                        Observation.RESOURCE_CONTAINMENT, self.config.RESOURCE, self.config.BINARY, "")

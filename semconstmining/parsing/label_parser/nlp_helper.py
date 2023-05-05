@@ -219,9 +219,11 @@ class NlpHelper:
         sims = []
         if len(sentences1) > 0:
             embeddings1 = [self.known_embeddings[sent] if sent in self.known_embeddings else
-                           self.sent_model.encode(sent, convert_to_tensor=True) for sent in sentences1]
+                           self.sent_model.encode(sent, convert_to_tensor=True, show_progress_bar=False)
+                           for sent in sentences1]
             embeddings2 = [self.known_embeddings[sent] if sent in self.known_embeddings else
-                           self.sent_model.encode(sent, convert_to_tensor=True) for sent in sentences2]
+                           self.sent_model.encode(sent, convert_to_tensor=True, show_progress_bar=False)
+                           for sent in sentences2]
             # Compute cosine-similarities
             cosine_scores = [float(util.cos_sim(embedding1, embedding2)) for embedding1, embedding2 in
                              zip(embeddings1, embeddings2)]
@@ -316,7 +318,8 @@ class NlpHelper:
                     concat_res.remove("")
                 sentences += res_labels
         self.known_embeddings |= {sent: embedding for sent, embedding in
-                                  zip(sentences, self.sent_model.encode(sentences, convert_to_tensor=True)) if
+                                  zip(sentences, self.sent_model.encode(sentences, convert_to_tensor=True,
+                                                                        show_progress_bar=False)) if
                                   sent not in self.known_embeddings}
 
 

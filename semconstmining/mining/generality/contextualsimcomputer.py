@@ -2,6 +2,8 @@ import logging
 import pickle
 from statistics import mean
 from pandas import DataFrame
+from tqdm import tqdm
+
 from semconstmining.parsing.resource_handler import ResourceHandler
 
 _logger = logging.getLogger(__name__)
@@ -28,8 +30,7 @@ class ContextualSimilarityComputer:
         # reference to the resource handler
         self.resource_handler = resource_handler
         if len(self.nlp_helper.known_sims) == 0:
-            if len(self.nlp_helper.known_embeddings) == 0:
-                self.nlp_helper.pre_compute_embeddings(self.constraints, self.resource_handler)
+            self.nlp_helper.pre_compute_embeddings(self.constraints, self.resource_handler)
 
     def compute_label_based_contextual_dissimilarity(self, mode=mean):
         _logger.info("Computing label-based contextual similarity")
@@ -40,7 +41,7 @@ class ContextualSimilarityComputer:
             _logger.error("Cannot access individual model data without a resource_handler being set! Set it to use "
                           "this method")
             return
-        for idx, row in self.constraints.iterrows():
+        for idx, row in tqdm(self.constraints.iterrows()):
             concat_labels = self.nlp_helper.prepare_labels(row, self.resource_handler)
             if len(concat_labels) < 2:
                 continue
@@ -70,7 +71,7 @@ class ContextualSimilarityComputer:
             _logger.error("Cannot access individual model data without a resource_handler being set! Set it to use "
                           "this method")
             return
-        for idx, row in self.constraints.iterrows():
+        for idx, row in tqdm(self.constraints.iterrows()):
             concat_labels = self.nlp_helper.prepare_objs(row, self.resource_handler)
             if len(concat_labels) < 2:
                 continue

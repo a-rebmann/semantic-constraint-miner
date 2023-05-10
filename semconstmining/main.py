@@ -151,13 +151,17 @@ def get_or_mine_constraints(config, resource_handler, min_support=2, dict_filter
     return non_redundant
 
 
-def check_constraints(config, log_name, constraints, nlp_helper):
+def check_constraints(config, process, constraints, nlp_helper, pd_log=None):
     lh = LogHandler(config)
-    constraints = DataFrame() if constraints is None else constraints
-    pd_log = lh.read_log(config.DATA_LOGS, log_name)
     if pd_log is None:
-        return None
-    declare_checker = DeclareChecker(config, pd_log, constraints, nlp_helper)
+        pd_log = lh.read_log(config.DATA_LOGS, process)
+        if pd_log is None:
+            _logger.info("No log found for process " + process)
+            return None
+    else:
+        lh.log = pd_log
+    constraints = DataFrame() if constraints is None else constraints
+    declare_checker = DeclareChecker(config, lh, constraints, nlp_helper)
     return declare_checker.check_constraints()
 
 
@@ -200,9 +204,10 @@ def get_context_sim_computer(config, constraints, nlp_helper, resource_handler, 
     contextual_similarity_computer = ContextualSimilarityComputer(config, constraints, nlp_helper, resource_handler)
     contextual_similarity_computer.compute_object_based_contextual_dissimilarity()
     contextual_similarity_computer.compute_label_based_contextual_dissimilarity()
-    contextual_similarity_computer.compute_name_based_contextual_dissimilarity()
+    #contextual_similarity_computer.compute_name_based_contextual_dissimilarity()
     _logger.info("Generality computed")
-    store_preprocessed(config, constraints, min_support, dict_filter, mark_redundant, with_nat_lang)
+    store_preprocessed(config, contextual_similarity_computer.constraints, min_support, dict_filter, mark_redundant,
+                       with_nat_lang)
     return contextual_similarity_computer
 
 
@@ -239,7 +244,7 @@ def recommend_constraints_for_log(config, rec_config, constraints, nlp_helper, p
     recommender = ConstraintRecommender(config, rec_config, log_info)
     recommended_constraints = recommender.recommend(constraints)
     constraint_fitter = ConstraintFitter(config, process, recommended_constraints)
-    fitted_constraints = constraint_fitter.fit_constraints()
+    fitted_constraints = constraint_fitter.fit_constraints(rec_config.relevance_thresh)
     fitted_constraints = recommender.recommend_by_activation(fitted_constraints)
     return fitted_constraints
 

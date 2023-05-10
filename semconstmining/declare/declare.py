@@ -378,8 +378,9 @@ class Declare:
         self.conformance_checking_results = {}
         for i, trace in enumerate(self.log):
             trc_res = check_trace_conformance(trace, self.model, consider_vacuity)
-            self.conformance_checking_results[(str(i), str(trace.attributes["concept:name"]))] = trc_res
-
+            self.conformance_checking_results[trace.attributes["concept:name"]] = {const for const, res in
+                                                                                   trc_res.items() if
+                                                                                   res.state == TraceState.VIOLATED}
         return self.conformance_checking_results
 
     def discovery(self, consider_vacuity: bool, max_declare_cardinality: int = 3, output_path: str = None,

@@ -84,24 +84,17 @@ existence_based_on = {
 }
 
 relation_based_on = {
-    Template.CHOICE.templ_str: None,
-    Template.EXCLUSIVE_CHOICE.templ_str: None,
-    Template.RESPONDED_EXISTENCE.templ_str: None,
     Template.RESPONSE.templ_str: Template.RESPONDED_EXISTENCE.templ_str,
     Template.ALTERNATE_RESPONSE.templ_str: Template.RESPONSE.templ_str,
     Template.CHAIN_RESPONSE.templ_str: Template.ALTERNATE_RESPONSE.templ_str,
-    Template.PRECEDENCE.templ_str: None,
     Template.ALTERNATE_PRECEDENCE.templ_str: Template.PRECEDENCE.templ_str,
     Template.CHAIN_PRECEDENCE.templ_str: Template.ALTERNATE_PRECEDENCE.templ_str,
 
     Template.NOT_RESPONDED_EXISTENCE.templ_str: Template.NOT_SUCCESSION.templ_str,
     Template.NOT_RESPONSE.templ_str: Template.NOT_CHAIN_RESPONSE.templ_str,
-    Template.NOT_CHAIN_RESPONSE.templ_str: None,
     Template.NOT_PRECEDENCE.templ_str: Template.NOT_CHAIN_PRECEDENCE.templ_str,
     Template.NOT_SUCCESSION.templ_str: Template.NOT_ALTERNATE_SUCCESSION.templ_str,
     Template.NOT_ALTERNATE_SUCCESSION.templ_str: Template.NOT_CHAIN_SUCCESSION.templ_str,
-    Template.NOT_CHAIN_SUCCESSION.templ_str: None,
-    Template.NOT_CO_EXISTENCE.templ_str: None
 }
 
 opponent_constraint = {

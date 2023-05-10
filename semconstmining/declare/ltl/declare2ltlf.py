@@ -1,8 +1,8 @@
-from pylogics.syntax.base import And, Formula, Implies, Not, Or, _BinaryOp, _UnaryOp, TrueFormula, Logic
+from pylogics.syntax.base import And, Implies, Not, Or
 from pylogics.syntax.ltl import Always, Eventually, Next, Until, PropositionalTrue, Atomic
 from pylogics.utils.to_string import to_string
-from pylogics.syntax.pltl import Before, Historically, Once, Since
-from pylogics.parsers.ltl import parse_ltl
+
+from semconstmining.parsing.label_parser.nlp_helper import sanitize_label
 
 from semconstmining.declare.enums import Template
 from semconstmining.declare.parsers import parse_single_constraint
@@ -20,11 +20,10 @@ def to_ltl(constraint_str):
     if constraint["template"].supports_cardinality:
         n = int(constraint['n'])
     activities = constraint['activities']
-    activity_left = Atomic(activities[0].replace(" ", "_"))
+    activity_left = Atomic(sanitize_label(activities[0]).replace(" ", "_"))
     activity_right = None
     if len(activities) == 2:
-        activity_right = Atomic(activities[1].replace(" ", "_"))
-
+        activity_right = Atomic(sanitize_label(activities[1]).replace(" ", "_"))
     if templ_str == Template.ABSENCE.templ_str:
         if n == 1:
             return Not(Eventually(activity_left))

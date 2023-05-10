@@ -14,8 +14,9 @@ class ConstraintFitter:
         self.log_info = log_info
         self.constraints = constraints
 
-    def fit_constraints(self, sim_threshold=0.0):
+    def fit_constraints(self, sim_threshold=0.5):
         const_dfs = [self.fit_constraint(t, sim_threshold) for _, t in self.constraints.reset_index().iterrows()]
+        const_dfs = [t for t in const_dfs if not t.empty]
         if len(const_dfs) == 0:
             return pd.DataFrame()
         temp = (
@@ -123,7 +124,7 @@ class ConstraintFitter:
     def instantiate_resource_constraint(self, row, act, res):
         record = self.instantiate_multi_obj_or_act_constraint(row, act, None)
         record[self.config.CONSTRAINT_STR] = record[self.config.CONSTRAINT_STR].replace(
-            record[self.config.CONSTRAINT_STR.split("A.org:role is not")[1]].strip(), res)
+            record[self.config.OBJECT], res)
         record[self.config.RECORD_ID] = row[self.config.RECORD_ID] + "_" + self.config.RESOURCE + act + "_" + res
         record[self.config.FITTED_RECORD_ID] = record[self.config.RECORD_ID]
         return record

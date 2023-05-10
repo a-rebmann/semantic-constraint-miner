@@ -84,6 +84,7 @@ class NlpHelper:
                                                                                len(self.known_sims)))
         # Maps a (partial) label to its synonyms
         self.synonym_map = {}
+        self.similar_actions = {}
 
     def check_tok_for_object_type(self, split, pred):
         new_pred = []
@@ -193,7 +194,7 @@ class NlpHelper:
     @property
     def sent_model(self):
         if self._sent_model is None:
-            self._sent_model = SentenceTransformer(self.config.SENTENCE_TRANSFORMER)
+            self._sent_model = SentenceTransformer(self.config.DATA_ROOT / self.config.SENTENCE_TRANSFORMER)
         return self._sent_model
 
     def get_synonyms(self, verb):
@@ -205,6 +206,23 @@ class NlpHelper:
         synonyms.add(lemma)
         self.synonym_map[lemma] = synonyms
         return synonyms
+
+    def get_similar_actions(self, act):
+        if act in self.similar_actions:
+            return self.similar_actions[act]
+        try:
+            related_words = self.glove_embeddings.most_similar(act, topn=100)
+        except KeyError:
+            return set()
+        related_words = set([w for w, score in related_words if score > 0.8])
+        similar_actions = set()
+        for verb in related_words:
+            doc = self.nlp(verb)
+            for tok in doc:
+                if tok.tag_.startswith("VB"):
+                    similar_actions.add(tok.lemma_)
+        self.similar_actions[act] = similar_actions
+        return similar_actions
 
     def get_sims(self, unique_combinations):
         known_scores = [self.known_sims[combi]
@@ -219,10 +237,10 @@ class NlpHelper:
         sims = []
         if len(sentences1) > 0:
             embeddings1 = [self.known_embeddings[sent] if sent in self.known_embeddings else
-                           self.sent_model.encode(sent, convert_to_tensor=True, show_progress_bar=False)
+                           self.sent_model.encode(sent, convert_to_tensor=True, show_progress_bar=True)
                            for sent in sentences1]
             embeddings2 = [self.known_embeddings[sent] if sent in self.known_embeddings else
-                           self.sent_model.encode(sent, convert_to_tensor=True, show_progress_bar=False)
+                           self.sent_model.encode(sent, convert_to_tensor=True, show_progress_bar=True)
                            for sent in sentences2]
             # Compute cosine-similarities
             cosine_scores = [float(util.cos_sim(embedding1, embedding2)) for embedding1, embedding2 in
@@ -233,7 +251,7 @@ class NlpHelper:
             write_pickle(self.known_sims, self.knowm_sim_ser)
         return sims + known_scores
 
-    def prepare_labels(self, row, resource_handler):
+    def prepare_labels(self, row, resource_handler, precompute=False):
         model_ids = [x.strip() for x in row[self.config.MODEL_ID].split("|")]
         concat_labels = list(
             resource_handler.bpmn_model_elements[
@@ -245,7 +263,7 @@ class NlpHelper:
             concat_labels = concat_labels[:5] + concat_labels[-5:]
         return [concat_label for concat_label in concat_labels if concat_label not in self.config.TERMS_FOR_MISSING]
 
-    def prepare_names(self, row):
+    def prepare_names(self, row, precompute=False):
         names = row[self.config.MODEL_NAME].split("|")
         names = [sanitize_label(name)
                  for name in names if sanitize_label(name) not in self.config.TERMS_FOR_MISSING
@@ -256,7 +274,7 @@ class NlpHelper:
             names = names[:5] + names[-5:]
         return names
 
-    def prepare_objs(self, row, resource_handler):
+    def prepare_objs(self, row, resource_handler, precompute=False):
         model_ids = [x.strip() for x in row[self.config.MODEL_ID].split("|")]
         concat_objects = set()
         for model_id in model_ids:
@@ -319,8 +337,9 @@ class NlpHelper:
                 sentences += res_labels
         self.known_embeddings |= {sent: embedding for sent, embedding in
                                   zip(sentences, self.sent_model.encode(sentences, convert_to_tensor=True,
-                                                                        show_progress_bar=False)) if
+                                                                        show_progress_bar=True)) if
                                   sent not in self.known_embeddings}
+        # write_pickle(self.known_embeddings, self.known_embedding_map_ser)
 
 
 if __name__ == '__main__':

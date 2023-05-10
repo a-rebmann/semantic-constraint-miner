@@ -48,13 +48,14 @@ class RelevanceComputer:
             object_sims[self.config.OBJECT][ext] = self.nlp_helper.get_sims(combi)[0]
         for ext in self.log_info.actions:
             synonyms = self.nlp_helper.get_synonyms(ext)
+            similar_actions = self.nlp_helper.get_similar_actions(ext)
             if not pd.isna(row[self.config.LEFT_OPERAND]) and not row[
                                                                       self.config.LEFT_OPERAND] in self.config.TERMS_FOR_MISSING:
-                if row[self.config.LEFT_OPERAND] in synonyms:
+                if row[self.config.LEFT_OPERAND] in synonyms or row[self.config.LEFT_OPERAND] in similar_actions:
                     object_sims[self.config.ACTION][row[self.config.LEFT_OPERAND]] = ext
             if not pd.isna(row[self.config.RIGHT_OPERAND]) and not row[
                                                                        self.config.RIGHT_OPERAND] in self.config.TERMS_FOR_MISSING:
-                if row[self.config.RIGHT_OPERAND] in synonyms:
+                if row[self.config.RIGHT_OPERAND] in synonyms or row[self.config.RIGHT_OPERAND] in similar_actions:
                     object_sims[self.config.ACTION][row[self.config.RIGHT_OPERAND]] = ext
         return object_sims
 

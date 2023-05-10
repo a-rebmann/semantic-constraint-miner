@@ -1,4 +1,5 @@
 import logging
+import os
 import random
 import time
 from copy import deepcopy
@@ -13,6 +14,8 @@ import pm4py
 from semconstmining.config import Config
 from sklearn.model_selection import KFold
 
+from semconstmining.declare.enums import TraceState
+from semconstmining.declare.parsers import parse_single_constraint
 from semconstmining.main import get_resource_handler, get_or_mine_constraints, get_context_sim_computer, \
     compute_relevance_for_log, recommend_constraints_for_log, check_constraints
 from semconstmining.mining.extraction.modelextractor import ModelExtractor
@@ -27,17 +30,6 @@ logging.basicConfig(format='[%(asctime)s] p%(process)s {%(filename)s:%(lineno)d}
                     level=logging.INFO)
 
 _logger = logging.getLogger(__name__)
-
-conf = Config(Path(__file__).parents[2].resolve(), "sap_sam_filtered")
-
-eval_configurations = [
-    (RecommendationConfig(config=conf, frequency_weight=0.5, semantic_weight=0.5, top_k=100),
-     FilterConfig(config=conf))
-]
-
-LOG_SIZE = 100
-NOISY_TRACE_PROB = 0.3
-NOISY_EVENT_PROB = 0.3
 
 
 # TODO add attribute to event log to indicate whether it is noisy or not + type of noise
@@ -117,9 +109,10 @@ def insert_noise(row, noisy_trace_prob, noisy_event_prob, log_size, resource_han
         log = deepcopy(row[conf.LOG])
     classes = _get_event_classes(row[conf.LOG])
     log_new = EventLog()
-    for trace in log:
+    for idx, trace in enumerate(log):
         if len(trace) > 0:
             trace_cpy = deepcopy(trace)
+            trace_cpy.attributes[conf.XES_NAME] = "Case " + str(idx)
             # check if trace makes random selection
             if random.random() <= noisy_trace_prob:
                 insert_more_noise = True
@@ -140,7 +133,8 @@ def insert_noise(row, noisy_trace_prob, noisy_event_prob, log_size, resource_han
                                         resource_handler.components.task_per_resource_per_model[row[conf.MODEL_ID]])
                     # flip coin to see if more noise will be inserted
                     insert_more_noise = (random.random() <= noisy_event_prob)
-            log_new.append(trace_cpy)
+            if len(trace_cpy) > 1:
+                log_new.append(trace_cpy)
     _logger.debug("Inserted noise into " + row[conf.MODEL_ID])
     return log_new
 
@@ -152,6 +146,8 @@ def add_role_info(row, resource_handler):
     resources = resource_handler.components.task_per_resource_per_model[row[resource_handler.config.MODEL_ID]]
     for trace in row[conf.LOG]:
         new_trace = Trace()
+        for att in trace.attributes:
+            new_trace.attributes[att] = trace.attributes[att]
         for event in trace:
             if event["concept:name"] in conf.TERMS_FOR_MISSING:
                 continue
@@ -167,6 +163,9 @@ def add_role_info(row, resource_handler):
 
 
 def load_or_generate_logs_from_sap_sam(resource_handler):
+    if exists(conf.DATA_EVAL / "sap_sam_noisy.pkl"):
+        df_results = pd.read_pickle(conf.DATA_EVAL / "sap_sam_noisy.pkl")
+        return df_results
     logs = resource_handler.bpmn_logs[resource_handler.bpmn_logs[conf.LOG].notna()]
     logs = logs[logs.apply(lambda row: len(row[conf.LOG]) > 0, axis=1)]
     # We do the following to get the task to role mapping
@@ -193,16 +192,75 @@ def load_or_generate_logs_from_sap_sam(resource_handler):
     _logger.info(f"Completed in {completed_in} seconds")
     noisy_logs = pd.concat(df_results)
     # Now we store the noisy logs
-    # noisy_logs.to_pickle(conf.DATA_INTERIM / "sap_sam_noisy.pkl")
+    noisy_logs.to_pickle(conf.DATA_EVAL / "sap_sam_noisy.pkl")
+    for (dir_path, dir_names, filenames) in os.walk(conf.DATA_EVAL):
+        for filename in filenames:
+            if filename != "sap_sam_noisy.pkl":
+                os.remove(dir_path + "/" + filename)
     return noisy_logs
 
 
-def evaluate_single_run(log_row, violations):
-    for violation in violations:
-        pass
+def get_violation_type(constraint):
+    return 0
 
 
-def run_configuration(constraints, logs):
+def evaluate_single_run(config_index, log_id, log_df, violations_per_type):
+    true_violations = {case: set(group[conf.VIOLATION_TYPE].dropna().unique())
+                       for case, group in log_df.groupby(conf.XES_CASE)}
+    true_violations = {case: violations for case, violations in true_violations.items() if len(violations) > 0}
+    predicted_violations = {}
+    for const_type, violations in violations_per_type.items():
+        if const_type == conf.OBJECT:
+            for obj_type, obj_violations in violations.items():
+                for case, violated_constraints in obj_violations.items():
+                    if case not in predicted_violations:
+                        predicted_violations[case] = set()
+                    for const in violated_constraints:
+                        predicted_violations[case].add(get_violation_type(const))
+        else:
+            for case, violated_constraints in violations.items():
+                if case not in predicted_violations:
+                    predicted_violations[case] = set()
+                for const in violated_constraints:
+                    predicted_violations[case].add(get_violation_type(const))
+    predicted_violations = {case: violations for case, violations in predicted_violations.items() if len(violations) > 0}
+    # Now we compute the metrics TODO considers one violation per type
+    tp = 0
+    fp = 0
+    fn = 0
+    for case, violations in true_violations.items():
+        if case not in predicted_violations:
+            fn += len(violations)
+        else:
+            for violation in violations:
+                if violation not in predicted_violations[case]:
+                    fn += 1
+                else:
+                    tp += 1
+    for case, violations in predicted_violations.items():
+        if case not in true_violations:
+            fp += len(violations)
+        else:
+            for violation in violations:
+                if violation not in true_violations[case]:
+                    fp += 1
+    if tp + fp == 0:
+        precision = 0
+    else:
+        precision = tp / (tp + fp)
+    if tp + fn == 0:
+        recall = 0
+    else:
+        recall = tp / (tp + fn)
+    if precision + recall == 0:
+        f1 = 0
+    else:
+        f1 = 2 * (precision * recall) / (precision + recall)
+    print(f"Precision: {precision}, Recall: {recall}, F1: {f1}")
+    return {"config": config_index, "log_id": log_id, "tp": tp, "fp": fp, "fn": fn, "precision": precision, "recall": recall, "f1": f1}
+
+
+def run_configuration(config_index, constraints, logs):
     eval_results = []
     for idx, log_row in logs.iterrows():
         # Log-specific constraint recommendation
@@ -217,11 +275,22 @@ def run_configuration(constraints, logs):
                                                                                                        inconsistent_subsets)
         else:
             consistent_recommended_constraints = recommended_constraints
-        violations = check_constraints(conf, log_row[conf.NAME], consistent_recommended_constraints, nlp_helper)
-        eval_result = evaluate_single_run(log_row, violations)
+        violations_per_type = check_constraints(conf, log_row[conf.NAME], consistent_recommended_constraints, nlp_helper, log)
+        eval_result = evaluate_single_run(config_index, log_row[conf.MODEL_ID], log, violations_per_type)
         eval_results.append(eval_result)
     return eval_results
 
+
+conf = Config(Path(__file__).parents[2].resolve(), "sap_sam_filtered")
+
+eval_configurations = [
+    (RecommendationConfig(config=conf, frequency_weight=0.5, semantic_weight=0.5, top_k=1000),
+     FilterConfig(config=conf))
+]
+
+LOG_SIZE = 100
+NOISY_TRACE_PROB = 0.3
+NOISY_EVENT_PROB = 0.3
 
 if __name__ == '__main__':
     _logger.info("Loading data")
@@ -230,9 +299,10 @@ if __name__ == '__main__':
     _logger.info("Loading constraints")
     all_constraints = get_or_mine_constraints(conf, resource_handler)
     _logger.info("Loading generality scores")
-    get_context_sim_computer(conf, all_constraints, nlp_helper, resource_handler)
+    all_constraints = get_context_sim_computer(conf, all_constraints, nlp_helper, resource_handler).constraints
     _logger.info("Loading logs")
     noisy_logs = load_or_generate_logs_from_sap_sam(resource_handler)
+    noisy_logs = noisy_logs[noisy_logs[conf.LOG].apply(lambda x: len(x) > 0)]
     _logger.info("Loaded logs")
     # Now we split the logs into train and test
     log_ids = list(noisy_logs[conf.MODEL_ID].unique())
@@ -240,15 +310,24 @@ if __name__ == '__main__':
     _logger.info(f"Unique model ids: {len(log_ids)}")
     _logger.info("Starting evaluation")
     kf = KFold(n_splits=5, shuffle=True, random_state=42)
+    average_results_per_config = []
     for fold, (train_idx, test_idx) in enumerate(kf.split(log_ids)):
+        fold_results = []
         train_ids = [log_ids[i] for i in train_idx]
         test_ids = [log_ids[i] for i in test_idx]
         _logger.info(f"Starting fold {fold}")
         train_constraints = all_constraints[all_constraints[conf.MODEL_ID].isin(train_ids)]
         fold_test_logs = noisy_logs[noisy_logs[conf.MODEL_ID].isin(test_ids)]
-        for eval_config in eval_configurations:
+        for config_idx, eval_config in enumerate(eval_configurations):
             rec_config = eval_config[0]
             filt_config = eval_config[1]
             const_filter = ConstraintFilter(conf, filt_config, resource_handler)
             filtered_constraints = const_filter.filter_constraints(train_constraints)
-            run_configuration(filtered_constraints, fold_test_logs)
+            config_results = run_configuration(config_idx, filtered_constraints, fold_test_logs)
+            fold_results.extend(config_results)
+        fold_results_df = pd.DataFrame.from_records(fold_results)
+        average_results_per_config.append(fold_results_df.groupby("config").mean())
+        fold_results_df.to_csv(conf.DATA_EVAL / f"fold_{fold}.csv", index=False)
+    average_results_df = pd.concat(average_results_per_config)
+    average_results_df.to_csv(conf.DATA_EVAL / "average.csv", index=False)
+    _logger.info("Finished evaluation")

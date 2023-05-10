@@ -42,23 +42,13 @@ class SubsumptionAnalyzer:
         self.constraints[self.config.REDUNDANT] = False
 
     def check_subsumption(self):
-        # First, we get all possible operands (activities, objects, actions)
-        #all_operands = set()
-        #all_operands.update(self.constraints[self.config.LEFT_OPERAND].dropna().unique())
-        #all_operands.update(self.constraints[self.config.RIGHT_OPERAND].dropna().unique())
-        #for operand in all_operands:
-
-            # get all constraints that involve the current operand
-
-        constraints = self.constraints[(~self.constraints[self.config.REDUNDANT])]
-        # | (self.constraints[RIGHT_OPERAND] == operand)
-        non_red_const = len(constraints)
+        constraints = self.constraints[(~self.constraints[self.config.REDUNDANT]) & (
+            self.constraints[self.config.TEMPLATE].isin(relation_based_on.keys()))]
+        _logger.info("Checking subsumption for {} constraints".format(len(constraints)))
         counter = 0
         for constraint_tuple in constraints.itertuples():
             constraint = parse_single_constraint(constraint_tuple.constraint_string)
             counter += 1
-            if constraint is None:
-                continue
             # for every constraint, check subsumption
             if self.config.POLICY == self.config.EAGER_ON_SUPPORT_OVER_HIERARCHY:
                 tmp = constraint["template"]

@@ -71,11 +71,6 @@ class ExtractionHandler:
         return df_declare
 
     def aggregate_constraints(self, min_support=1):
-        kb_path = str(self.constraint_kb_ser_file).replace("constraint_", "constraint_min_support=" + str(min_support))
-        if exists(kb_path):
-            _logger.info("Loading stored observations.")
-            temp = pd.read_pickle(kb_path)
-            return temp
         temp = self.get_all_observations().copy(deep=True)
         temp = temp[temp.apply(lambda x: self.check_for_irrelevant_constraints(x), axis=1)]
         # We determine the support of the extracted observations and remove duplicate rows
@@ -93,7 +88,6 @@ class ExtractionHandler:
         temp = temp.drop_duplicates(subset=[self.config.CONSTRAINT_STR, self.config.LEVEL, self.config.OBJECT])
         # We only retain constraints that have the minimum support
         temp = temp[temp[self.config.SUPPORT] >= min_support]
-        temp.to_pickle(kb_path)
         return temp
 
     def get_all_observations(self):

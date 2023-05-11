@@ -238,6 +238,7 @@ class Config:
         self.IS_REFERENCED = "is_referenced"
         self.SOUND = "sound"
         self.LOG = "log"
+        self.NOISY_LOG = "noisy_log"
         self.ACTION = "action"
         self.ACTION_CATEGORY = "action_category"
         self.TAGS = "tags"

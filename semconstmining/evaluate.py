@@ -14,13 +14,13 @@ import pm4py
 from semconstmining.config import Config
 from sklearn.model_selection import KFold
 
-from semconstmining.declare.enums import TraceState
+from semconstmining.declare.enums import Template
 from semconstmining.declare.parsers import parse_single_constraint
 from semconstmining.main import get_resource_handler, get_or_mine_constraints, get_context_sim_computer, \
     compute_relevance_for_log, recommend_constraints_for_log, check_constraints
+from semconstmining.mining.extraction.extractionhandler import ExtractionHandler
 from semconstmining.mining.extraction.modelextractor import ModelExtractor
 from semconstmining.parsing.label_parser.nlp_helper import NlpHelper
-from semconstmining.parsing.resource_handler import ResourceHandler
 from semconstmining.selection.consistency.consistency import ConsistencyChecker
 from semconstmining.selection.instantiation.constraintfilter import ConstraintFilter
 from semconstmining.selection.instantiation.filter_config import FilterConfig
@@ -30,6 +30,56 @@ logging.basicConfig(format='[%(asctime)s] p%(process)s {%(filename)s:%(lineno)d}
                     level=logging.INFO)
 
 _logger = logging.getLogger(__name__)
+
+violation_type_to_constraint = {
+    0: {Template.EXISTENCE.templ_str,
+        Template.PRECEDENCE.templ_str,
+        Template.RESPONSE.templ_str,
+        Template.SUCCESSION.templ_str,
+        Template.ALTERNATE_RESPONSE.templ_str,
+        Template.ALTERNATE_PRECEDENCE.templ_str,
+        Template.ALTERNATE_SUCCESSION.templ_str,
+        Template.EXACTLY.templ_str,
+        Template.EXCLUSIVE_CHOICE.templ_str,
+        Template.RESPONDED_EXISTENCE.templ_str
+        },
+    1: {Template.ALTERNATE_SUCCESSION.templ_str,
+        Template.ALTERNATE_RESPONSE.templ_str,
+        Template.ALTERNATE_PRECEDENCE.templ_str,
+        Template.EXACTLY.templ_str,
+        Template.ABSENCE.templ_str,
+        Template.EXCLUSIVE_CHOICE.templ_str,
+        },
+    2: {Template.SUCCESSION.templ_str,
+        Template.ALTERNATE_SUCCESSION.templ_str,
+        Template.RESPONSE.templ_str,
+        Template.ALTERNATE_RESPONSE.templ_str,
+        Template.PRECEDENCE.templ_str,
+        Template.ALTERNATE_PRECEDENCE.templ_str
+        },
+    3: {Template.ABSENCE.templ_str}
+}
+
+constraint_to_violation_types = {
+    Template.EXISTENCE.templ_str: {0},
+    Template.RESPONDED_EXISTENCE.templ_str: {0},
+    Template.PRECEDENCE.templ_str: {0},
+    Template.RESPONSE.templ_str: {0},
+    Template.SUCCESSION.templ_str: {0},
+    Template.ALTERNATE_RESPONSE.templ_str: {0, 1},
+    Template.ALTERNATE_PRECEDENCE.templ_str: {0, 1},
+    Template.ALTERNATE_SUCCESSION.templ_str: {0, 1, 2},
+    Template.EXACTLY.templ_str: {0, 1},
+    Template.ABSENCE.templ_str: {1, 3},
+    Template.EXCLUSIVE_CHOICE.templ_str: {0, 1}
+}
+
+violation_number_to_type = {
+    0: {"remove"},
+    1: {"insert"},
+    2: {"swap"},
+    3: {"resource"}
+}
 
 
 # TODO add attribute to event log to indicate whether it is noisy or not + type of noise
@@ -172,6 +222,7 @@ def load_or_generate_logs_from_sap_sam(resource_handler):
     me = ModelExtractor(conf, resource_handler)
     me.get_perspectives_from_models()
     logs[conf.LOG] = logs.apply(lambda row: add_role_info(row, resource_handler), axis=1)
+    logs[conf.NOISY_LOG] = None
     df_results = []
     split_df = np.array_split(logs, 100)
     start = time.time()
@@ -181,7 +232,7 @@ def load_or_generate_logs_from_sap_sam(resource_handler):
             df = pd.read_pickle(conf.DATA_EVAL / file_name)
         else:
             # Now we expand and add noise to the logs
-            df[conf.LOG] = df.apply(lambda row: insert_noise(row, NOISY_TRACE_PROB,
+            df[conf.NOISY_LOG] = df.apply(lambda row: insert_noise(row, NOISY_TRACE_PROB,
                                                            NOISY_EVENT_PROB, LOG_SIZE,
                                                            resource_handler), axis=1)
             df.to_pickle(conf.DATA_EVAL / file_name)
@@ -204,70 +255,43 @@ def get_violation_type(constraint):
     return 0
 
 
-def evaluate_single_run(config_index, log_id, log_df, violations_per_type):
-    true_violations = {case: set(group[conf.VIOLATION_TYPE].dropna().unique())
-                       for case, group in log_df.groupby(conf.XES_CASE)}
-    true_violations = {case: violations for case, violations in true_violations.items() if len(violations) > 0}
-    predicted_violations = {}
-    for const_type, violations in violations_per_type.items():
-        if const_type == conf.OBJECT:
-            for obj_type, obj_violations in violations.items():
-                for case, violated_constraints in obj_violations.items():
-                    if case not in predicted_violations:
-                        predicted_violations[case] = set()
-                    for const in violated_constraints:
-                        predicted_violations[case].add(get_violation_type(const))
-        else:
-            for case, violated_constraints in violations.items():
-                if case not in predicted_violations:
-                    predicted_violations[case] = set()
-                for const in violated_constraints:
-                    predicted_violations[case].add(get_violation_type(const))
-    predicted_violations = {case: violations for case, violations in predicted_violations.items() if len(violations) > 0}
-    # Now we compute the metrics TODO considers one violation per type
+def evaluate_single_run(config_index, log_id, true_violations_per_type, violations_per_type):
     tp = 0
     fp = 0
     fn = 0
-    for case, violations in true_violations.items():
-        if case not in predicted_violations:
-            fn += len(violations)
-        else:
-            for violation in violations:
-                if violation not in predicted_violations[case]:
-                    fn += 1
-                else:
-                    tp += 1
-    for case, violations in predicted_violations.items():
-        if case not in true_violations:
+    for const_type, violations in violations_per_type.items():
+        if const_type not in true_violations_per_type:
             fp += len(violations)
         else:
             for violation in violations:
-                if violation not in true_violations[case]:
+                if violation not in true_violations_per_type[const_type]:
                     fp += 1
-    if tp + fp == 0:
-        precision = 0
-    else:
-        precision = tp / (tp + fp)
-    if tp + fn == 0:
-        recall = 0
-    else:
-        recall = tp / (tp + fn)
-    if precision + recall == 0:
-        f1 = 0
-    else:
-        f1 = 2 * (precision * recall) / (precision + recall)
+                else:
+                    tp += 1
+    for const_type, violations in true_violations_per_type.items():
+        if const_type not in violations_per_type:
+            fn += len(violations)
+        else:
+            for violation in violations:
+                if violation not in violations_per_type[const_type]:
+                    fn += 1
+    precision = tp / (tp + fp) if tp + fp > 0 else 0
+    recall = tp / (tp + fn) if tp + fn > 0 else 0
+    f1 = 2 * (precision * recall) / (precision + recall) if precision + recall > 0 else 0
     print(f"Precision: {precision}, Recall: {recall}, F1: {f1}")
     return {"config": config_index, "log_id": log_id, "tp": tp, "fp": fp, "fn": fn, "precision": precision, "recall": recall, "f1": f1}
 
 
-def run_configuration(config_index, constraints, logs):
+def run_configuration(config_index, constraints, logs, base_const):
     eval_results = []
     for idx, log_row in logs.iterrows():
         # Log-specific constraint recommendation
         name = resource_handler.bpmn_models.loc[log_row[conf.MODEL_ID]][conf.NAME]
-        log = pm4py.convert_to_dataframe(log_row[conf.LOG])
-        constraints = compute_relevance_for_log(conf, constraints, nlp_helper, resource_handler, name, log)
-        recommended_constraints = recommend_constraints_for_log(conf, rec_config, constraints, nlp_helper, name, log)
+        #log = pm4py.convert_to_dataframe(log_row[conf.LOG])
+        noisy_log = pm4py.convert_to_dataframe(log_row[conf.NOISY_LOG])
+        constraints = compute_relevance_for_log(conf, constraints, nlp_helper, resource_handler, name, noisy_log,
+                                                precompute_all_sims=True)
+        recommended_constraints = recommend_constraints_for_log(conf, rec_config, constraints, nlp_helper, name, noisy_log)
         consistency_checker = ConsistencyChecker(conf)
         inconsistent_subsets = consistency_checker.check_consistency(recommended_constraints)
         if len(inconsistent_subsets) > 0:
@@ -275,8 +299,11 @@ def run_configuration(config_index, constraints, logs):
                                                                                                        inconsistent_subsets)
         else:
             consistent_recommended_constraints = recommended_constraints
-        violations_per_type = check_constraints(conf, log_row[conf.NAME], consistent_recommended_constraints, nlp_helper, log)
-        eval_result = evaluate_single_run(config_index, log_row[conf.MODEL_ID], log, violations_per_type)
+        true_constraints = base_const[base_const[conf.MODEL_ID] == log_row[conf.MODEL_ID]]
+        violations_per_type = check_constraints(conf, log_row[conf.NAME], consistent_recommended_constraints, nlp_helper, noisy_log)
+        true_violations_per_type = check_constraints(conf, log_row[conf.NAME], true_constraints, nlp_helper, noisy_log)
+        eval_result = evaluate_single_run(config_index, log_row[conf.MODEL_ID], true_violations_per_type,
+                                          violations_per_type)
         eval_results.append(eval_result)
     return eval_results
 
@@ -289,24 +316,26 @@ eval_configurations = [
 ]
 
 LOG_SIZE = 100
-NOISY_TRACE_PROB = 0.3
-NOISY_EVENT_PROB = 0.3
+NOISY_TRACE_PROB = 0.5
+NOISY_EVENT_PROB = 0.5
 
 if __name__ == '__main__':
     _logger.info("Loading data")
     nlp_helper = NlpHelper(conf)
     resource_handler = get_resource_handler(conf, nlp_helper)
+    base_constraints = ExtractionHandler(conf, resource_handler).get_all_observations()
     _logger.info("Loading constraints")
     all_constraints = get_or_mine_constraints(conf, resource_handler)
     _logger.info("Loading generality scores")
-    all_constraints = get_context_sim_computer(conf, all_constraints, nlp_helper, resource_handler).constraints
+    all_constraints = all_constraints.drop(columns=[conf.LABEL_BASED_GENERALITY, conf.OBJECT_BASED_GENERALITY])
+    all_constraints = get_context_sim_computer(conf, all_constraints, nlp_helper, resource_handler,
+                                               precompute_all_sims=True).constraints
     _logger.info("Loading logs")
     noisy_logs = load_or_generate_logs_from_sap_sam(resource_handler)
     noisy_logs = noisy_logs[noisy_logs[conf.LOG].apply(lambda x: len(x) > 0)]
     _logger.info("Loaded logs")
     # Now we split the logs into train and test
     log_ids = list(noisy_logs[conf.MODEL_ID].unique())
-    log_ids = log_ids[:100] # TODO: Remove this
     _logger.info(f"Unique model ids: {len(log_ids)}")
     _logger.info("Starting evaluation")
     kf = KFold(n_splits=5, shuffle=True, random_state=42)
@@ -315,15 +344,16 @@ if __name__ == '__main__':
         fold_results = []
         train_ids = [log_ids[i] for i in train_idx]
         test_ids = [log_ids[i] for i in test_idx]
+        constraint_ids = base_constraints[~(base_constraints[conf.MODEL_ID].isin(test_ids))].index.unique()
         _logger.info(f"Starting fold {fold}")
-        train_constraints = all_constraints[all_constraints[conf.MODEL_ID].isin(train_ids)]
+        train_constraints = all_constraints[all_constraints[conf.RECORD_ID].isin(constraint_ids)]
         fold_test_logs = noisy_logs[noisy_logs[conf.MODEL_ID].isin(test_ids)]
         for config_idx, eval_config in enumerate(eval_configurations):
             rec_config = eval_config[0]
             filt_config = eval_config[1]
             const_filter = ConstraintFilter(conf, filt_config, resource_handler)
             filtered_constraints = const_filter.filter_constraints(train_constraints)
-            config_results = run_configuration(config_idx, filtered_constraints, fold_test_logs)
+            config_results = run_configuration(config_idx, filtered_constraints, fold_test_logs, base_constraints)
             fold_results.extend(config_results)
         fold_results_df = pd.DataFrame.from_records(fold_results)
         average_results_per_config.append(fold_results_df.groupby("config").mean())

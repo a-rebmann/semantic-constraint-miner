@@ -1,4 +1,5 @@
 import logging
+import multiprocessing
 import re
 from itertools import chain
 from os.path import exists
@@ -9,6 +10,8 @@ import spacy
 import gensim.downloader as api
 from nltk.corpus import wordnet
 from sentence_transformers import SentenceTransformer, util
+from tqdm import tqdm
+
 from semconstmining.mining.model.parsed_label import ParsedLabel
 from semconstmining.parsing.label_parser.bert_wrapper import BertWrapper
 from semconstmining.parsing.label_parser.bert_for_label_parsing import BertForLabelParsing
@@ -227,7 +230,8 @@ class NlpHelper:
     def get_sims(self, unique_combinations):
         known_scores = [self.known_sims[combi]
                         for combi in unique_combinations if combi in self.known_sims]
-
+        if len(known_scores) == len(unique_combinations):
+            return known_scores
         sentences1 = [combi[0] for combi in unique_combinations if combi not in self.known_sims]
         sentences2 = [combi[1] for combi in unique_combinations if combi not in self.known_sims]
 
@@ -237,10 +241,10 @@ class NlpHelper:
         sims = []
         if len(sentences1) > 0:
             embeddings1 = [self.known_embeddings[sent] if sent in self.known_embeddings else
-                           self.sent_model.encode(sent, convert_to_tensor=True, show_progress_bar=True)
+                           self.sent_model.encode(sent, convert_to_tensor=True, show_progress_bar=False)
                            for sent in sentences1]
             embeddings2 = [self.known_embeddings[sent] if sent in self.known_embeddings else
-                           self.sent_model.encode(sent, convert_to_tensor=True, show_progress_bar=True)
+                           self.sent_model.encode(sent, convert_to_tensor=True, show_progress_bar=False)
                            for sent in sentences2]
             # Compute cosine-similarities
             cosine_scores = [float(util.cos_sim(embedding1, embedding2)) for embedding1, embedding2 in
@@ -248,8 +252,10 @@ class NlpHelper:
             for i, _ in enumerate(sentences1):
                 self.known_sims[(sentences1[i], sentences2[i])] = float(cosine_scores[i])
             sims = [float(cosine_scores[i]) for i in range(len(sentences1))]
-            write_pickle(self.known_sims, self.knowm_sim_ser)
         return sims + known_scores
+
+    def store_sims(self):
+        write_pickle(self.known_sims, self.knowm_sim_ser)
 
     def prepare_labels(self, row, resource_handler, precompute=False):
         model_ids = [x.strip() for x in row[self.config.MODEL_ID].split("|")]
@@ -259,7 +265,7 @@ class NlpHelper:
         )
         # Computing semantic similarity using sentence transformers is super expensive on CPU, therefore,
         # we randomly pick k names for which we make comparisons TODO any way to ground this procedure on something?
-        if len(concat_labels) > 10:
+        if len(concat_labels) > 10 and not precompute:
             concat_labels = concat_labels[:5] + concat_labels[-5:]
         return [concat_label for concat_label in concat_labels if concat_label not in self.config.TERMS_FOR_MISSING]
 
@@ -270,7 +276,7 @@ class NlpHelper:
                  and not type(name) == float]
         # Computing semantic similarity using sentence transformers is super expensive on CPU, therefore,
         # we randomly pick k names for which we make comparisons TODO any way to ground this procedure on something?
-        if len(names) > 10:
+        if len(names) > 10 and not precompute:
             names = names[:5] + names[-5:]
         return names
 
@@ -281,7 +287,7 @@ class NlpHelper:
             if model_id in resource_handler.components.all_objects_per_model:
                 concat_objects.update(resource_handler.components.all_objects_per_model[str(model_id)])
         concat_objects = list(concat_objects)
-        if len(concat_objects) > 10:
+        if len(concat_objects) > 10 and not precompute:
             concat_objects = concat_objects[:5] + concat_objects[-5:]
         if "" in concat_objects:
             concat_objects.remove("")
@@ -296,7 +302,7 @@ class NlpHelper:
         return [action for action in unique_actions if not pd.isna(action)
                 and action not in self.config.TERMS_FOR_MISSING]
 
-    def pre_compute_embeddings(self, constraints, resource_handler, sentences=None):
+    def pre_compute_embeddings(self, constraints, resource_handler, sentences=None, with_sims=False):
         """
         Pre-computes the embeddings for all natural language components relevant for the constraints
         :param constraints: the constraints
@@ -339,7 +345,31 @@ class NlpHelper:
                                   zip(sentences, self.sent_model.encode(sentences, convert_to_tensor=True,
                                                                         show_progress_bar=True)) if
                                   sent not in self.known_embeddings}
-        # write_pickle(self.known_embeddings, self.known_embedding_map_ser)
+        if with_sims:
+            params = list(self.known_embeddings.keys())
+            _logger.info("Computing cosine similarities for {} sentences".format(len(params)))
+            unique_combinations = [(a, b) for idx, a in enumerate(params) for b in params[idx + 1:]]
+            _logger.info("Computing cosine similarities for {} unique sentence combinations".format(
+                len(unique_combinations)))
+            sentences1 = [combi[0] for combi in unique_combinations]
+            sentences2 = [combi[1] for combi in unique_combinations]
+
+            num_sentences = len(sentences1)
+            num_processes = multiprocessing.cpu_count()-1
+
+            # Split the sentences into equal parts
+            batch_size = num_sentences // len(params)
+            sentence_batches = [(sentences1[i:i + batch_size], sentences2[i:i + batch_size])
+                                for i in range(0, num_sentences, batch_size)]
+
+            # Compute cosine-similarities
+            for batch in tqdm(sentence_batches):
+                embeddings1 = [self.known_embeddings[sent] for sent in batch[0]]
+                embeddings2 = [self.known_embeddings[sent] for sent in batch[1]]
+                cosine_scores = [float(util.cos_sim(embedding1, embedding2)) for embedding1, embedding2 in
+                                 zip(embeddings1, embeddings2)]
+                for i, _ in tqdm(enumerate(batch[0])):
+                    self.known_sims[(batch[0][i], batch[1][i])] = float(cosine_scores[i])
 
 
 if __name__ == '__main__':

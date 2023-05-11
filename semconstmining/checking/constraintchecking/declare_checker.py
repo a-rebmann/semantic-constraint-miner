@@ -13,8 +13,6 @@ import pm4py
 from semconstmining.parsing.label_parser.nlp_helper import NlpHelper
 
 
-
-
 class DeclareChecker:
 
     def __init__(self, config, lh: LogHandler, constraints: DataFrame, nlp_helper: NlpHelper):

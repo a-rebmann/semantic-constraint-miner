@@ -17,14 +17,13 @@ class RelevanceComputer:
         self.nlp_helper = nlp_helper
         self.resource_handler = resource_handler
         self.log_info = log_info
+        self.counter = 0
 
-    def compute_relevance(self, constraints):
-        _logger.info("Computing relevance")
+    def compute_relevance(self, constraints, pre_computed=False):
+        _logger.info(f"Computing relevance for {len(constraints)} constraints")
         constraints = constraints.copy(deep=True)
-        self.nlp_helper.pre_compute_embeddings(constraints, self.resource_handler,
-                                               sentences=self.log_info.labels + self.log_info.names +
-                                                         list(self.log_info.resources_to_tasks.keys()) + self.log_info.objects +
-                                                         self.log_info.actions)
+        if not pre_computed:
+            self.nlp_helper.pre_compute_embeddings(constraints, self.resource_handler, sentences=self.log_info.labels + self.log_info.names + list(self.log_info.resources_to_tasks.keys()) + self.log_info.objects + self.log_info.actions)
         constraints[self.config.INDIVIDUAL_RELEVANCE_SCORES] = \
             constraints.apply(lambda row: self._compute_relevance(row), axis=1)
         constraints[self.config.SEMANTIC_BASED_RELEVANCE] = constraints.apply(lambda row: self.get_max_scores(row),
@@ -32,6 +31,9 @@ class RelevanceComputer:
         return constraints
 
     def _compute_relevance(self, row):
+        self.counter += 1
+        if self.counter % 500 == 0:
+            _logger.info(f"Computing relevance for constraint number {self.counter}")
         if row[self.config.LEVEL] == self.config.OBJECT:
             return self.get_relevance_for_object_constraint(row)
         elif row[self.config.LEVEL] == self.config.MULTI_OBJECT:

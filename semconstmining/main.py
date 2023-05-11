@@ -213,7 +213,7 @@ def get_context_sim_computer(config, constraints, nlp_helper, resource_handler, 
 
 
 def compute_relevance_for_log(config, constraints, nlp_helper, resource_handler, process, pd_log=None,
-                              precompute_all_sims=False):
+                              precompute=False):
     lh = LogHandler(config)
     if pd_log is None:
         pd_log = lh.read_log(config.DATA_LOGS, process)
@@ -227,7 +227,7 @@ def compute_relevance_for_log(config, constraints, nlp_helper, resource_handler,
     log_info = LogInfo(nlp_helper, labels, [process], resources_to_tasks)
     start_time = time.time()
     relevance_computer = RelevanceComputer(config, nlp_helper, resource_handler, log_info)
-    constraints = relevance_computer.compute_relevance(constraints, pre_computed=precompute_all_sims)
+    constraints = relevance_computer.compute_relevance(constraints, pre_compute=precompute)
     nlp_helper.store_sims()
     _logger.info("Relevance computation took " + str(time.time() - start_time) + " seconds")
     return constraints

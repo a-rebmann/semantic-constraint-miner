@@ -19,15 +19,16 @@ class RelevanceComputer:
         self.log_info = log_info
         self.counter = 0
 
-    def compute_relevance(self, constraints, pre_computed=False):
+    def compute_relevance(self, constraints, pre_compute=False):
         _logger.info(f"Computing relevance for {len(constraints)} constraints")
         constraints = constraints.copy(deep=True)
-        if not pre_computed:
+        if pre_compute:
             self.nlp_helper.pre_compute_embeddings(sentences=self.log_info.labels + self.log_info.names + list(self.log_info.resources_to_tasks.keys()) + self.log_info.objects + self.log_info.actions)
         constraints[self.config.INDIVIDUAL_RELEVANCE_SCORES] = \
             constraints.apply(lambda row: self._compute_relevance(row), axis=1)
         constraints[self.config.SEMANTIC_BASED_RELEVANCE] = constraints.apply(lambda row: self.get_max_scores(row),
                                                                               axis=1)
+        self.nlp_helper.store_sims()
         return constraints
 
     def _compute_relevance(self, row):

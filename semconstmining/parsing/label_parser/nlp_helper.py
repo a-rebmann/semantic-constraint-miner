@@ -303,16 +303,17 @@ class NlpHelper:
         return [action for action in unique_actions if not pd.isna(action)
                 and action not in self.config.TERMS_FOR_MISSING]
 
-    def precompute_embeddings_and_sims(self, resource_handler, sims=True):
+    def precompute_embeddings_and_sims(self, resource_handler, sims=False):
         self.model_id_to_unique_labels = {model_id: group[self.config.CLEANED_LABEL].unique() for model_id, group in
-                                     resource_handler.bpmn_model_elements.groupby(self.config.MODEL_ID)}
+                                          resource_handler.bpmn_model_elements.groupby(self.config.MODEL_ID)}
         self.model_id_to_unique_objects = resource_handler.components.all_objects_per_model
         self.model_id_to_unique_resources = resource_handler.components.all_resources_per_model
         self.model_id_to_name = {model_id: group[self.config.NAME].unique() for model_id, group in
-                                     resource_handler.bpmn_models.groupby(self.config.MODEL_ID)}
+                                 resource_handler.bpmn_models.groupby(self.config.MODEL_ID)}
         # combine all labels, objects and resources into a set with unique elements
         elements = set([element for model_id, labels in self.model_id_to_unique_labels.items() for element in labels] +
-                       [element for model_id, objects in self.model_id_to_unique_objects.items() for element in objects] +
+                       [element for model_id, objects in self.model_id_to_unique_objects.items() for element in
+                        objects] +
                        [element for model_id, resources in self.model_id_to_unique_resources.items() for element in
                         resources])
         # remove empty strings
@@ -364,13 +365,15 @@ class NlpHelper:
                 # Compute the Cartesian product of the resources
                 resource_product = itertools.product(resources1, resources2)
                 # Filter out redundant pairs and pairs with the same resource
-                unique_pairs = {(resource1, resource2) for resource1, resource2 in resource_product if resource1 != resource2}
+                unique_pairs = {(resource1, resource2) for resource1, resource2 in resource_product if
+                                resource1 != resource2}
                 new_pairs = unique_pairs - resource_pairs
                 # Add the new pairs to the set of resource pairs
                 resource_pairs |= new_pairs
             self.compute_sims(label_pairs)
             self.compute_sims(object_pairs)
             self.compute_sims(resource_pairs)
+            self.store_sims()
 
     def pre_compute_embeddings(self, sentences):
         """
@@ -403,32 +406,38 @@ class NlpHelper:
             for i, _ in tqdm(enumerate(batch[0])):
                 self.known_sims[(batch[0][i], batch[1][i])] = float(cosine_scores[i])
 
-    def cluster(self, constraints):
-        sentences = constraints.apply(lambda x: x[self.config.NAT_LANG_TEMPLATE].replace("{1}",
-                                                                                         x[self.config.LEFT_OPERAND]).replace("{2}",
-                                                                                         x[self.config.RIGHT_OPERAND]), axis=1).tolist()
-        corpus_sentences = list(sentences)
-        print("Encode the corpus. This might take a while")
-        corpus_embeddings = self.sent_model.encode(corpus_sentences, batch_size=64, show_progress_bar=True,
-                                         convert_to_tensor=True)
+    def replace_stuff(self, x):
+        res = x[self.config.NAT_LANG_TEMPLATE].replace("{1}", x[self.config.LEFT_OPERAND]) if x[
+                                                                                                 self.config.LEFT_OPERAND] != "" else x[
+            self.config.NAT_LANG_TEMPLATE]
+        if not pd.isna(x[self.config.RIGHT_OPERAND]) and x[self.config.RIGHT_OPERAND] != "":
+            res += res.replace("{2}", x[self.config.RIGHT_OPERAND])
+        return res
 
-        print("Start clustering")
+    def cluster(self, constraints):
+        sentences = constraints.apply(lambda x: self.replace_stuff(x), axis=1).tolist()
+        corpus_sentences = list(sentences)
+        _logger.info("Encode the corpus. This might take a while")
+        corpus_embeddings = self.sent_model.encode(corpus_sentences, batch_size=64, show_progress_bar=True,
+                                                   convert_to_tensor=True)
+
+        _logger.info("Start clustering")
         start_time = time.time()
         # Two parameters to tune:
         # min_cluster_size: Only consider cluster that have at least 25 elements
         # threshold: Consider sentence pairs with a cosine-similarity larger than threshold as similar
         clusters = util.community_detection(corpus_embeddings, min_community_size=1000, threshold=0.5)
 
-        print("Clustering done after {:.2f} sec".format(time.time() - start_time))
+        _logger.info("Clustering done after {:.2f} sec".format(time.time() - start_time))
 
         # Print for all clusters the top 3 and bottom 3 elements
         for i, cluster in enumerate(clusters):
-            print("\nCluster {}, #{} Elements ".format(i + 1, len(cluster)))
+            _logger.info("\nCluster {}, #{} Elements ".format(i + 1, len(cluster)))
             for sentence_id in cluster[0:3]:
-                print("\t", corpus_sentences[sentence_id])
-            print("\t", "...")
+                _logger.info("\t", corpus_sentences[sentence_id])
+            _logger.info("\t", "...")
             for sentence_id in cluster[-3:]:
-                print("\t", corpus_sentences[sentence_id])
+                _logger.info("\t", corpus_sentences[sentence_id])
 
 
 if __name__ == '__main__':

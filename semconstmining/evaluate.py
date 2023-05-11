@@ -290,7 +290,7 @@ def run_configuration(config_index, constraints, logs, base_const):
         #log = pm4py.convert_to_dataframe(log_row[conf.LOG])
         noisy_log = pm4py.convert_to_dataframe(log_row[conf.NOISY_LOG])
         constraints = compute_relevance_for_log(conf, constraints, nlp_helper, resource_handler, name, noisy_log,
-                                                precompute_all_sims=True)
+                                                precompute=True)
         recommended_constraints = recommend_constraints_for_log(conf, rec_config, constraints, nlp_helper, name, noisy_log)
         consistency_checker = ConsistencyChecker(conf)
         inconsistent_subsets = consistency_checker.check_consistency(recommended_constraints)
@@ -328,8 +328,8 @@ if __name__ == '__main__':
     all_constraints = get_or_mine_constraints(conf, resource_handler)
     _logger.info("Loading generality scores")
     all_constraints = all_constraints.drop(columns=[conf.LABEL_BASED_GENERALITY, conf.OBJECT_BASED_GENERALITY])
-    all_constraints = get_context_sim_computer(conf, all_constraints, nlp_helper, resource_handler,
-                                               precompute_all_sims=True).constraints
+    # nlp_helper.cluster(all_constraints)
+    all_constraints = get_context_sim_computer(conf, all_constraints, nlp_helper, resource_handler).constraints
     _logger.info("Loading logs")
     noisy_logs = load_or_generate_logs_from_sap_sam(resource_handler)
     noisy_logs = noisy_logs[noisy_logs[conf.LOG].apply(lambda x: len(x) > 0)]

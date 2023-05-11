@@ -22,17 +22,17 @@ def read_pickle(path):
 
 class ContextualSimilarityComputer:
 
-    def __init__(self, config, constraints: DataFrame, nlp_helper, resource_handler: ResourceHandler = None,
-                 pre_compute=False):
+    def __init__(self, config, constraints: DataFrame, nlp_helper, resource_handler: ResourceHandler = None):
         self.config = config
         self.constraints = constraints
         # reference to the word model used (default Spacy)
         self.nlp_helper = nlp_helper
         # reference to the resource handler
         self.resource_handler = resource_handler
-        self.pre_compute = pre_compute
         if len(self.nlp_helper.known_sims) == 0:
-            self.nlp_helper.pre_compute_embeddings(self.constraints, self.resource_handler, with_sims=pre_compute)
+            self.nlp_helper.precompute_embeddings_and_sims(self.resource_handler, sims=False)
+            _logger.info("Stored pre-computed similarities")
+            #self.nlp_helper.pre_compute_embeddings(self.constraints, self.resource_handler, with_sims=pre_compute)
 
     def compute_label_based_contextual_dissimilarity(self, mode=mean):
         _logger.info("Computing label-based contextual similarity")
@@ -45,7 +45,7 @@ class ContextualSimilarityComputer:
             return
         _logger.info("Total number of constraints: %d", len(self.constraints))
         for idx, row in tqdm(self.constraints.iterrows()):
-            concat_labels = self.nlp_helper.prepare_labels(row, self.resource_handler, precompute=self.pre_compute)
+            concat_labels = self.nlp_helper.prepare_labels(row)
             if len(concat_labels) < 2:
                 continue
             unique_combinations = [(a, b) for idx, a in enumerate(concat_labels) for b in concat_labels[idx + 1:]]
@@ -58,7 +58,7 @@ class ContextualSimilarityComputer:
             return
         self.constraints[self.config.NAME_BASED_GENERALITY] = 0.0
         for idx, row in self.constraints.iterrows():
-            names = self.nlp_helper.prepare_names(row, precompute=self.pre_compute)
+            names = self.nlp_helper.prepare_names(row)
             if len(names) < 2:
                 continue
             unique_combinations = [(a, b) for idx, a in enumerate(names) for b in names[idx + 1:]]
@@ -76,7 +76,7 @@ class ContextualSimilarityComputer:
             return
         _logger.info("Total number of constraints: %d", len(self.constraints))
         for idx, row in tqdm(self.constraints.iterrows()):
-            concat_labels = self.nlp_helper.prepare_objs(row, self.resource_handler, precompute=self.pre_compute)
+            concat_labels = self.nlp_helper.prepare_objs(row)
             if len(concat_labels) < 2:
                 continue
             unique_combinations = [(a, b) for idx, a in enumerate(concat_labels) for b in concat_labels[idx + 1:]]

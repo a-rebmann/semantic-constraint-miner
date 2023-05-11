@@ -1,5 +1,7 @@
+import itertools
 import logging
 import multiprocessing
+import random
 import re
 from itertools import chain
 from os.path import exists
@@ -68,6 +70,11 @@ def camel_to_white(label):
 class NlpHelper:
 
     def __init__(self, config):
+        self.model_id_to_unique_resources = {}
+        self.model_id_to_unique_objects = {}
+        self.model_id_to_unique_labels = {}
+        self.model_id_to_unique_name = {}
+        self.model_id_to_name = {}
         self.config = config
         self.model = BertWrapper.load_serialized(config.MODEL_PATH, BertForLabelParsing)
         self.parse_map = {}
@@ -79,6 +86,9 @@ class NlpHelper:
                                        (self.config.MODEL_COLLECTION + "_" + self.config.EMB_MAP)
         self.knowm_sim_ser = self.config.DATA_INTERIM / \
                              (self.config.MODEL_COLLECTION + "_" + self.config.SIM_MAP)
+        self.known_labels = dict()
+        self.known_objects = dict()
+        self.known_resources = dict()
         self.known_embeddings = {} if not exists(self.known_embedding_map_ser) else read_pickle(
             self.known_embedding_map_ser)
         # Maps pairs of labels to their similarity
@@ -104,7 +114,8 @@ class NlpHelper:
         if label in self.parse_map:
             return self.parse_map[label]
         split, tags = self.predict_single_label(label)
-        result = ParsedLabel(self.config, label, split, tags, self.find_objects(split, tags), self.find_actions(split, tags, lemmatize=True), self.config.LANGUAGE)
+        result = ParsedLabel(self.config, label, split, tags, self.find_objects(split, tags),
+                             self.find_actions(split, tags, lemmatize=True), self.config.LANGUAGE)
         if print_outcome:
             print(label, ", act:", result.actions, ", bos:", result.bos, ', tags:', tags)
         self.parse_map[label] = result
@@ -185,7 +196,7 @@ class NlpHelper:
                 for tok in doc:
                     if tok.tag_.startswith("VB"):
                         present_tense_verbs.add(tok.lemma_)
-                #present_tense_verbs.update(tok.lemma_ for tok in doc if tok.tag_.startswith("VB"))
+                # present_tense_verbs.update(tok.lemma_ for tok in doc if tok.tag_.startswith("VB"))
                 if len(present_tense_verbs) > 0:
                     break
         if present_tense_verbs:
@@ -257,40 +268,29 @@ class NlpHelper:
     def store_sims(self):
         write_pickle(self.known_sims, self.knowm_sim_ser)
 
-    def prepare_labels(self, row, resource_handler, precompute=False):
+    def prepare_labels(self, row):
         model_ids = [x.strip() for x in row[self.config.MODEL_ID].split("|")]
-        concat_labels = list(
-            resource_handler.bpmn_model_elements[
-                resource_handler.bpmn_model_elements[self.config.MODEL_ID].astype(str).isin(model_ids)][self.config.CLEANED_LABEL].unique()
-        )
-        # Computing semantic similarity using sentence transformers is super expensive on CPU, therefore,
-        # we randomly pick k names for which we make comparisons TODO any way to ground this procedure on something?
-        if len(concat_labels) > 10 and not precompute:
-            concat_labels = concat_labels[:5] + concat_labels[-5:]
+        concat_labels = set()
+        for model_id in model_ids:
+            sample_set = self.model_id_to_unique_labels[model_id]
+            concat_labels.update(random.sample(sample_set, k=min(5, len(sample_set))))
         return [concat_label for concat_label in concat_labels if concat_label not in self.config.TERMS_FOR_MISSING]
 
-    def prepare_names(self, row, precompute=False):
-        names = row[self.config.MODEL_NAME].split("|")
-        names = [sanitize_label(name)
-                 for name in names if sanitize_label(name) not in self.config.TERMS_FOR_MISSING
-                 and not type(name) == float]
-        # Computing semantic similarity using sentence transformers is super expensive on CPU, therefore,
-        # we randomly pick k names for which we make comparisons TODO any way to ground this procedure on something?
-        if len(names) > 10 and not precompute:
-            names = names[:5] + names[-5:]
-        return names
+    def prepare_names(self, row):
+        model_ids = [x.strip() for x in row[self.config.MODEL_ID].split("|")]
+        concat_names = list()
+        for model_id in model_ids:
+            if model_id in self.model_id_to_unique_name:
+                concat_names.extend(self.model_id_to_unique_name[model_id])
+        return [concat_label for concat_label in concat_names if concat_label not in self.config.TERMS_FOR_MISSING]
 
-    def prepare_objs(self, row, resource_handler, precompute=False):
+    def prepare_objs(self, row):
         model_ids = [x.strip() for x in row[self.config.MODEL_ID].split("|")]
         concat_objects = set()
         for model_id in model_ids:
-            if model_id in resource_handler.components.all_objects_per_model:
-                concat_objects.update(resource_handler.components.all_objects_per_model[str(model_id)])
-        concat_objects = list(concat_objects)
-        if len(concat_objects) > 10 and not precompute:
-            concat_objects = concat_objects[:5] + concat_objects[-5:]
-        if "" in concat_objects:
-            concat_objects.remove("")
+            if model_id in self.model_id_to_unique_objects:
+                sample_set = self.model_id_to_unique_objects[model_id]
+                concat_objects.update(random.sample(sample_set, k=min(5, len(sample_set))))
         return [bo for bo in concat_objects if not pd.isna(bo) and bo not in self.config.TERMS_FOR_MISSING]
 
     def prepare_actions(self, row):
@@ -302,74 +302,105 @@ class NlpHelper:
         return [action for action in unique_actions if not pd.isna(action)
                 and action not in self.config.TERMS_FOR_MISSING]
 
-    def pre_compute_embeddings(self, constraints, resource_handler, sentences=None, with_sims=False):
+    def precompute_embeddings_and_sims(self, resource_handler, sims=False):
+        self.model_id_to_unique_labels = {model_id: group[self.config.CLEANED_LABEL].unique() for model_id, group in
+                                     resource_handler.bpmn_model_elements.groupby(self.config.MODEL_ID)}
+        self.model_id_to_unique_objects = resource_handler.components.all_objects_per_model
+        self.model_id_to_unique_resources = resource_handler.components.all_resources_per_model
+        self.model_id_to_name = {model_id: group[self.config.NAME].unique() for model_id, group in
+                                     resource_handler.bpmn_models.groupby(self.config.MODEL_ID)}
+        # combine all labels, objects and resources into a set with unique elements
+        elements = set([element for model_id, labels in self.model_id_to_unique_labels.items() for element in labels] +
+                       [element for model_id, objects in self.model_id_to_unique_objects.items() for element in objects] +
+                       [element for model_id, resources in self.model_id_to_unique_resources.items() for element in
+                        resources])
+        # remove empty strings
+        elements = [element for element in elements if element != ""]
+        # compute embeddings for all elements
+        embeddings = self.sent_model.encode(elements, convert_to_tensor=True, show_progress_bar=True)
+
+        self.known_embeddings = {element: embedding for element, embedding in zip(elements, embeddings)}
+        _logger.info("Number of elements: {}".format(len(elements)))
+        if sims:
+            # compute similarities between all labels across different models
+            label_pairs = set()
+
+            # Iterate over pairs of model IDs
+            for model_id1, model_id2 in itertools.combinations(self.model_id_to_unique_labels.keys(), 2):
+                labels1 = self.model_id_to_unique_labels[model_id1]
+                labels2 = self.model_id_to_unique_labels[model_id2]
+                # Compute the Cartesian product of the labels
+                label_product = itertools.product(labels1, labels2)
+                # Filter out redundant pairs and pairs with the same label
+                unique_pairs = {(label1, label2) for label1, label2 in label_product if label1 != label2}
+                new_pairs = unique_pairs - label_pairs
+                # Add the new pairs to the set of label pairs
+                label_pairs |= new_pairs
+            _logger.info("Number of label pairs: {}".format(len(label_pairs)))
+            label_pairs = list(label_pairs)
+            # compute similarities between all objects across different models
+            # sizeof the em
+            object_pairs = set()
+            # Iterate over pairs of model IDs
+            for model_id1, model_id2 in itertools.combinations(self.model_id_to_unique_objects.keys(), 2):
+                objects1 = self.model_id_to_unique_objects[model_id1]
+                objects2 = self.model_id_to_unique_objects[model_id2]
+                # Compute the Cartesian product of the objects
+                object_product = itertools.product(objects1, objects2)
+                # Filter out redundant pairs and pairs with the same object
+                unique_pairs = {(object1, object2) for object1, object2 in object_product if object1 != object2}
+                new_pairs = unique_pairs - object_pairs
+                # Add the new pairs to the set of object pairs
+                object_pairs |= new_pairs
+            _logger.info("Number of object pairs: {}".format(len(object_pairs)))
+            object_pairs = list(object_pairs)
+            # compute similarities between all resources across different models
+            resource_pairs = set()
+            # Iterate over pairs of model IDs
+            for model_id1, model_id2 in itertools.combinations(self.model_id_to_unique_resources.keys(), 2):
+                resources1 = self.model_id_to_unique_resources[model_id1]
+                resources2 = self.model_id_to_unique_resources[model_id2]
+                # Compute the Cartesian product of the resources
+                resource_product = itertools.product(resources1, resources2)
+                # Filter out redundant pairs and pairs with the same resource
+                unique_pairs = {(resource1, resource2) for resource1, resource2 in resource_product if resource1 != resource2}
+                new_pairs = unique_pairs - resource_pairs
+                # Add the new pairs to the set of resource pairs
+                resource_pairs |= new_pairs
+            self.compute_sims(label_pairs)
+            self.compute_sims(object_pairs)
+            self.compute_sims(resource_pairs)
+
+    def pre_compute_embeddings(self, sentences):
         """
-        Pre-computes the embeddings for all natural language components relevant for the constraints
-        :param constraints: the constraints
-        :param resource_handler: the resource handler
+        Pre-computes the embeddings for all natural language components
         :param sentences: the sentences to pre-compute embeddings for
         """
-        if sentences is None:
-            sentences = list(set(name for names in constraints[self.config.MODEL_NAME].unique()
-                                 for name in names.split("|")))
-            sentences = [sanitize_label(name) for name in sentences if not pd.isna(name) and
-                         sanitize_label(name) not in self.config.TERMS_FOR_MISSING]
-            if resource_handler is not None:
-                unique_ids = list(set(
-                    model_id.strip() for model_ids in constraints[self.config.MODEL_ID].unique() for model_id in
-                    model_ids.split("|")))
-                concat_labels = list(
-                    resource_handler.bpmn_model_elements[
-                        resource_handler.bpmn_model_elements[self.config.MODEL_ID].isin(unique_ids)][self.config.CLEANED_LABEL].unique()
-                )
-                sentences += concat_labels
-                concat_objects = set()
-                sentences = [name for name in sentences if not type(name) == float]
-                for model_id in unique_ids:
-                    if model_id in resource_handler.components.all_objects_per_model:
-                        concat_objects.update(resource_handler.components.all_objects_per_model[model_id])
-                concat_objects = list(concat_objects)
-                if "" in concat_objects:
-                    concat_objects.remove("")
-                sentences += concat_objects
-                res_labels = list(constraints[constraints[self.config.LEVEL] == self.config.RESOURCE][self.config.LEFT_OPERAND].unique())
-                concat_res = set()
-                for model_id in unique_ids:
-                    if model_id in resource_handler.components.all_resources_per_model:
-                        concat_res.update(resource_handler.components.all_resources_per_model[model_id])
-                concat_res = list(concat_res)
-                if "" in concat_res:
-                    concat_res.remove("")
-                sentences += res_labels
         self.known_embeddings |= {sent: embedding for sent, embedding in
                                   zip(sentences, self.sent_model.encode(sentences, convert_to_tensor=True,
                                                                         show_progress_bar=True)) if
                                   sent not in self.known_embeddings}
-        if with_sims:
-            params = list(self.known_embeddings.keys())
-            _logger.info("Computing cosine similarities for {} sentences".format(len(params)))
-            unique_combinations = [(a, b) for idx, a in enumerate(params) for b in params[idx + 1:]]
-            _logger.info("Computing cosine similarities for {} unique sentence combinations".format(
-                len(unique_combinations)))
-            sentences1 = [combi[0] for combi in unique_combinations]
-            sentences2 = [combi[1] for combi in unique_combinations]
 
-            num_sentences = len(sentences1)
-            num_processes = multiprocessing.cpu_count()-1
+    def compute_sims(self, params):
+        sentences1 = [combi[0] for combi in params]
+        sentences2 = [combi[1] for combi in params]
 
-            # Split the sentences into equal parts
-            batch_size = num_sentences // len(params)
-            sentence_batches = [(sentences1[i:i + batch_size], sentences2[i:i + batch_size])
-                                for i in range(0, num_sentences, batch_size)]
+        num_sentences = len(sentences1)
+        num_processes = multiprocessing.cpu_count() - 1
 
-            # Compute cosine-similarities
-            for batch in tqdm(sentence_batches):
-                embeddings1 = [self.known_embeddings[sent] for sent in batch[0]]
-                embeddings2 = [self.known_embeddings[sent] for sent in batch[1]]
-                cosine_scores = [float(util.cos_sim(embedding1, embedding2)) for embedding1, embedding2 in
-                                 zip(embeddings1, embeddings2)]
-                for i, _ in tqdm(enumerate(batch[0])):
-                    self.known_sims[(batch[0][i], batch[1][i])] = float(cosine_scores[i])
+        # Split the sentences into equal parts
+        batch_size = num_sentences // len(params)
+        sentence_batches = [(sentences1[i:i + batch_size], sentences2[i:i + batch_size])
+                            for i in range(0, num_sentences, batch_size)]
+
+        # Compute cosine-similarities
+        for batch in tqdm(sentence_batches):
+            embeddings1 = [self.known_embeddings[sent] for sent in batch[0]]
+            embeddings2 = [self.known_embeddings[sent] for sent in batch[1]]
+            cosine_scores = [float(util.cos_sim(embedding1, embedding2)) for embedding1, embedding2 in
+                             zip(embeddings1, embeddings2)]
+            for i, _ in tqdm(enumerate(batch[0])):
+                self.known_sims[(batch[0][i], batch[1][i])] = float(cosine_scores[i])
 
 
 if __name__ == '__main__':

@@ -3,6 +3,7 @@ import logging
 import multiprocessing
 import random
 import re
+import time
 from itertools import chain
 from os.path import exists
 from pathlib import Path
@@ -252,10 +253,10 @@ class NlpHelper:
         sims = []
         if len(sentences1) > 0:
             embeddings1 = [self.known_embeddings[sent] if sent in self.known_embeddings else
-                           self.sent_model.encode(sent, convert_to_tensor=True, show_progress_bar=False)
+                           self.sent_model.encode(sent, convert_to_tensor=True, show_progress_bar=True)
                            for sent in sentences1]
             embeddings2 = [self.known_embeddings[sent] if sent in self.known_embeddings else
-                           self.sent_model.encode(sent, convert_to_tensor=True, show_progress_bar=False)
+                           self.sent_model.encode(sent, convert_to_tensor=True, show_progress_bar=True)
                            for sent in sentences2]
             # Compute cosine-similarities
             cosine_scores = [float(util.cos_sim(embedding1, embedding2)) for embedding1, embedding2 in
@@ -273,7 +274,7 @@ class NlpHelper:
         concat_labels = set()
         for model_id in model_ids:
             sample_set = self.model_id_to_unique_labels[model_id]
-            concat_labels.update(random.sample(sample_set, k=min(5, len(sample_set))))
+            concat_labels.update(random.sample(sample_set, k=min(2, len(sample_set))))
         return [concat_label for concat_label in concat_labels if concat_label not in self.config.TERMS_FOR_MISSING]
 
     def prepare_names(self, row):
@@ -290,7 +291,7 @@ class NlpHelper:
         for model_id in model_ids:
             if model_id in self.model_id_to_unique_objects:
                 sample_set = self.model_id_to_unique_objects[model_id]
-                concat_objects.update(random.sample(sample_set, k=min(5, len(sample_set))))
+                concat_objects.update(random.sample(sample_set, k=min(2, len(sample_set))))
         return [bo for bo in concat_objects if not pd.isna(bo) and bo not in self.config.TERMS_FOR_MISSING]
 
     def prepare_actions(self, row):
@@ -302,7 +303,7 @@ class NlpHelper:
         return [action for action in unique_actions if not pd.isna(action)
                 and action not in self.config.TERMS_FOR_MISSING]
 
-    def precompute_embeddings_and_sims(self, resource_handler, sims=False):
+    def precompute_embeddings_and_sims(self, resource_handler, sims=True):
         self.model_id_to_unique_labels = {model_id: group[self.config.CLEANED_LABEL].unique() for model_id, group in
                                      resource_handler.bpmn_model_elements.groupby(self.config.MODEL_ID)}
         self.model_id_to_unique_objects = resource_handler.components.all_objects_per_model
@@ -401,6 +402,33 @@ class NlpHelper:
                              zip(embeddings1, embeddings2)]
             for i, _ in tqdm(enumerate(batch[0])):
                 self.known_sims[(batch[0][i], batch[1][i])] = float(cosine_scores[i])
+
+    def cluster(self, constraints):
+        sentences = constraints.apply(lambda x: x[self.config.NAT_LANG_TEMPLATE].replace("{1}",
+                                                                                         x[self.config.LEFT_OPERAND]).replace("{2}",
+                                                                                         x[self.config.RIGHT_OPERAND]), axis=1).tolist()
+        corpus_sentences = list(sentences)
+        print("Encode the corpus. This might take a while")
+        corpus_embeddings = self.sent_model.encode(corpus_sentences, batch_size=64, show_progress_bar=True,
+                                         convert_to_tensor=True)
+
+        print("Start clustering")
+        start_time = time.time()
+        # Two parameters to tune:
+        # min_cluster_size: Only consider cluster that have at least 25 elements
+        # threshold: Consider sentence pairs with a cosine-similarity larger than threshold as similar
+        clusters = util.community_detection(corpus_embeddings, min_community_size=1000, threshold=0.5)
+
+        print("Clustering done after {:.2f} sec".format(time.time() - start_time))
+
+        # Print for all clusters the top 3 and bottom 3 elements
+        for i, cluster in enumerate(clusters):
+            print("\nCluster {}, #{} Elements ".format(i + 1, len(cluster)))
+            for sentence_id in cluster[0:3]:
+                print("\t", corpus_sentences[sentence_id])
+            print("\t", "...")
+            for sentence_id in cluster[-3:]:
+                print("\t", corpus_sentences[sentence_id])
 
 
 if __name__ == '__main__':

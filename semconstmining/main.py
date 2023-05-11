@@ -187,8 +187,7 @@ def get_resource_handler(config, nlp_helper):
 
 def get_context_sim_computer(config, constraints, nlp_helper, resource_handler, min_support=2, dict_filter=False,
                              mark_redundant=True,
-                             with_nat_lang=True,
-                             precompute_all_sims=False):
+                             with_nat_lang=True):
     """
     # To give an indicator of how generalizable constraints are, we compute the semantic similarity between
     # models these constraints were extracted from. The assumption is that if that similarity is very low

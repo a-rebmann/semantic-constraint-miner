@@ -29,10 +29,7 @@ class ContextualSimilarityComputer:
         self.nlp_helper = nlp_helper
         # reference to the resource handler
         self.resource_handler = resource_handler
-        if len(self.nlp_helper.known_sims) == 0:
-            self.nlp_helper.precompute_embeddings_and_sims(self.resource_handler, sims=False)
-            _logger.info("Stored pre-computed similarities")
-            #self.nlp_helper.pre_compute_embeddings(self.constraints, self.resource_handler, with_sims=pre_compute)
+        self.nlp_helper.precompute_embeddings_and_sims(self.resource_handler, sims=False)
 
     def compute_label_based_contextual_dissimilarity(self, mode=mean):
         _logger.info("Computing label-based contextual similarity")

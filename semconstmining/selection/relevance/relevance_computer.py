@@ -1,21 +1,15 @@
 import logging
-from statistics import mean
 
 import pandas as pd
-from pandas import DataFrame
-
-from semconstmining.parsing.label_parser import nlp_helper
-from semconstmining.parsing.resource_handler import write_pickle
 
 _logger = logging.getLogger(__name__)
 
 
 class RelevanceComputer:
 
-    def __init__(self, config, nlp_helper, resource_handler, log_info):
+    def __init__(self, config, nlp_helper, log_info):
         self.config = config
         self.nlp_helper = nlp_helper
-        self.resource_handler = resource_handler
         self.log_info = log_info
         self.counter = 0
 

@@ -303,7 +303,7 @@ class Config:
 
         self.CONSTRAINT_TYPES_TO_IGNORE = [Observation.RESOURCE_CONTAINMENT, Template.CHAIN_RESPONSE.templ_str,
                                            Template.CHAIN_PRECEDENCE.templ_str, Template.CHAIN_SUCCESSION.templ_str,
-                                           Template.CHOICE.templ_str] + self.NEGATIVE_TEMPLATES
+                                           Template.CHOICE.templ_str]
 
         self.CONSTRAINT_TEMPLATES_TO_IGNORE_PER_TYPE = {
             self.ACTIVITY: [],

@@ -1,8 +1,9 @@
 import logging
+import multiprocessing
 import os
 import random
 import time
-from copy import deepcopy
+from copy import deepcopy, copy
 from os.path import exists
 from pathlib import Path
 
@@ -10,12 +11,13 @@ import numpy as np
 import pandas as pd
 from pm4py.objects.log.obj import Trace, Event, EventLog
 import pm4py
+from tqdm import tqdm
 
 from semconstmining.config import Config
 from sklearn.model_selection import KFold
 
 from semconstmining.declare.enums import Template
-from semconstmining.declare.parsers import parse_single_constraint
+import torch.multiprocessing as mp
 from semconstmining.main import get_resource_handler, get_or_mine_constraints, get_context_sim_computer, \
     compute_relevance_for_log, recommend_constraints_for_log, check_constraints
 from semconstmining.mining.extraction.extractionhandler import ExtractionHandler
@@ -255,26 +257,42 @@ def get_violation_type(constraint):
     return 0
 
 
-def evaluate_single_run(config_index, log_id, true_violations_per_type, violations_per_type):
+def evaluate_single_run(config, config_index, log_id, true_violations_per_type, violations_per_type):
     tp = 0
     fp = 0
     fn = 0
     for const_type, violations in violations_per_type.items():
-        if const_type not in true_violations_per_type:
-            fp += len(violations)
+        if const_type == config.OBJECT:
+            for obj_type, obj_violations in violations.tems():
+                for case, case_violations in obj_violations.items():
+                    for violation in case_violations:
+                        if obj_type not in true_violations_per_type[const_type]:
+                            fp += 1
+                        elif violation not in true_violations_per_type[const_type][obj_type][case]:
+                            fp += 1
+                        else:
+                            tp += 1
         else:
-            for violation in violations:
-                if violation not in true_violations_per_type[const_type]:
-                    fp += 1
-                else:
-                    tp += 1
+            for case, case_violations in violations.items():
+                for violation in case_violations:
+                    if violation not in true_violations_per_type[const_type][case]:
+                        fp += 1
+                    else:
+                        tp += 1
     for const_type, violations in true_violations_per_type.items():
-        if const_type not in violations_per_type:
-            fn += len(violations)
+        if const_type == config.OBJECT:
+            for obj_type, obj_violations in violations.items():
+                for case, case_violations in obj_violations.items():
+                    for violation in case_violations:
+                        if obj_type not in violations_per_type[const_type]:
+                            fn += 1
+                        elif violation not in violations_per_type[const_type][obj_type][case]:
+                            fn += 1
         else:
-            for violation in violations:
-                if violation not in violations_per_type[const_type]:
-                    fn += 1
+            for case, case_violations in violations.items():
+                for violation in case_violations:
+                    if violation not in violations_per_type[const_type][case]:
+                        fn += 1
     precision = tp / (tp + fp) if tp + fp > 0 else 0
     recall = tp / (tp + fn) if tp + fn > 0 else 0
     f1 = 2 * (precision * recall) / (precision + recall) if precision + recall > 0 else 0
@@ -282,33 +300,59 @@ def evaluate_single_run(config_index, log_id, true_violations_per_type, violatio
     return {"config": config_index, "log_id": log_id, "tp": tp, "fp": fp, "fn": fn, "precision": precision, "recall": recall, "f1": f1}
 
 
-def run_configuration(config_index, constraints, logs, base_const):
+def run_batch_of_logs(config, const, base_const, df, config_index, nlp, r_config):
     eval_results = []
-    for idx, log_row in logs.iterrows():
-        # Log-specific constraint recommendation
-        name = resource_handler.bpmn_models.loc[log_row[conf.MODEL_ID]][conf.NAME]
-        #log = pm4py.convert_to_dataframe(log_row[conf.LOG])
-        noisy_log = pm4py.convert_to_dataframe(log_row[conf.NOISY_LOG])
-        constraints = compute_relevance_for_log(conf, constraints, nlp_helper, resource_handler, name, noisy_log,
+    for idx, log_row in df.iterrows():
+        name = log_row[config.NAME]
+        noisy_log = pm4py.convert_to_dataframe(log_row[config.NOISY_LOG])
+        constraints = compute_relevance_for_log(config, const, nlp, name, noisy_log,
                                                 precompute=True)
-        recommended_constraints = recommend_constraints_for_log(conf, rec_config, constraints, nlp_helper, name, noisy_log)
-        consistency_checker = ConsistencyChecker(conf)
+        recommended_constraints = recommend_constraints_for_log(config, r_config, constraints, nlp, name, noisy_log)
+        consistency_checker = ConsistencyChecker(config)
         inconsistent_subsets = consistency_checker.check_consistency(recommended_constraints)
         if len(inconsistent_subsets) > 0:
-            consistent_recommended_constraints = consistency_checker.make_set_consistent_max_relevance(recommended_constraints,
-                                                                                                       inconsistent_subsets)
+            consistent_recommended_constraints = consistency_checker.make_set_consistent_max_relevance(
+                recommended_constraints,
+                inconsistent_subsets)
         else:
             consistent_recommended_constraints = recommended_constraints
-        true_constraints = base_const[base_const[conf.MODEL_ID] == log_row[conf.MODEL_ID]]
-        violations_per_type = check_constraints(conf, log_row[conf.NAME], consistent_recommended_constraints, nlp_helper, noisy_log)
-        true_violations_per_type = check_constraints(conf, log_row[conf.NAME], true_constraints, nlp_helper, noisy_log)
-        eval_result = evaluate_single_run(config_index, log_row[conf.MODEL_ID], true_violations_per_type,
+        true_constraints = base_const[base_const[config.MODEL_ID] == log_row[config.MODEL_ID]]
+        violations_per_type = check_constraints(config, log_row[config.NAME], consistent_recommended_constraints, nlp,
+                                                noisy_log)
+        true_violations_per_type = check_constraints(config, log_row[config.NAME], true_constraints, nlp, noisy_log)
+        eval_result = evaluate_single_run(config, config_index, log_row[config.MODEL_ID], true_violations_per_type,
                                           violations_per_type)
         eval_results.append(eval_result)
     return eval_results
 
 
+def run_configuration(config_index, constraints, logs, base_const, r_config, multi_process=False):
+    eval_results = []
+    if multi_process:
+        from concurrent.futures import ProcessPoolExecutor
+        num_processes = multiprocessing.cpu_count() - 10
+        _logger.info("Number of processes: {}".format(num_processes))
+        mp.set_start_method('spawn')
+        split_df = np.array_split(constraints, len(logs) // num_processes)
+        with ProcessPoolExecutor(max_workers=num_processes) as executor:
+            futures = []
+            for batch in tqdm(split_df):
+                r_config_copy = deepcopy(r_config)
+                const_copy = deepcopy(constraints)
+                base_const_copy = deepcopy(base_const)
+                nlp_helper_copy = deepcopy(nlp_helper)
+                config_copy = deepcopy(conf)
+                futures.append(executor.submit(run_batch_of_logs, config_copy, const_copy, base_const_copy, batch, config_index, nlp_helper_copy, r_config_copy))
+            _logger.info("Number of futures: {}".format(len(futures)))
+            for future in tqdm(futures):
+                eval_results.extend(future.result())
+    else:
+        eval_results.extend(run_batch_of_logs(conf, constraints, base_const, logs, config_index, nlp_helper, r_config))
+    return eval_results
+
+
 conf = Config(Path(__file__).parents[2].resolve(), "sap_sam_filtered")
+conf.CONSTRAINT_TYPES_TO_IGNORE.extend(conf.NEGATIVE_TEMPLATES)
 
 eval_configurations = [
     (RecommendationConfig(config=conf, frequency_weight=0.5, semantic_weight=0.5, top_k=1000),
@@ -319,6 +363,8 @@ LOG_SIZE = 100
 NOISY_TRACE_PROB = 0.5
 NOISY_EVENT_PROB = 0.5
 
+MULTI_PROCESS = False
+
 if __name__ == '__main__':
     _logger.info("Loading data")
     nlp_helper = NlpHelper(conf)
@@ -327,12 +373,11 @@ if __name__ == '__main__':
     _logger.info("Loading constraints")
     all_constraints = get_or_mine_constraints(conf, resource_handler)
     _logger.info("Loading generality scores")
-    all_constraints = all_constraints.drop(columns=[conf.LABEL_BASED_GENERALITY, conf.OBJECT_BASED_GENERALITY])
-    # nlp_helper.cluster(all_constraints)
     all_constraints = get_context_sim_computer(conf, all_constraints, nlp_helper, resource_handler).constraints
     _logger.info("Loading logs")
     noisy_logs = load_or_generate_logs_from_sap_sam(resource_handler)
     noisy_logs = noisy_logs[noisy_logs[conf.LOG].apply(lambda x: len(x) > 0)]
+    noisy_logs[conf.NAME] = noisy_logs[conf.MODEL_ID].apply(lambda x: nlp_helper.model_id_to_name[x][0])
     _logger.info("Loaded logs")
     # Now we split the logs into train and test
     log_ids = list(noisy_logs[conf.MODEL_ID].unique())
@@ -353,7 +398,8 @@ if __name__ == '__main__':
             filt_config = eval_config[1]
             const_filter = ConstraintFilter(conf, filt_config, resource_handler)
             filtered_constraints = const_filter.filter_constraints(train_constraints)
-            config_results = run_configuration(config_idx, filtered_constraints, fold_test_logs, base_constraints)
+            config_results = run_configuration(config_idx, filtered_constraints, fold_test_logs, base_constraints, rec_config,
+                                               multi_process=MULTI_PROCESS)
             fold_results.extend(config_results)
         fold_results_df = pd.DataFrame.from_records(fold_results)
         average_results_per_config.append(fold_results_df.groupby("config").mean())

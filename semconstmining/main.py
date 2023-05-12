@@ -206,14 +206,14 @@ def get_context_sim_computer(config, constraints, nlp_helper, resource_handler, 
     contextual_similarity_computer.compute_object_based_contextual_dissimilarity()
     contextual_similarity_computer.compute_label_based_contextual_dissimilarity()
     contextual_similarity_computer.compute_name_based_contextual_dissimilarity()
-    nlp_helper.cluster(contextual_similarity_computer.constraints)
+    # nlp_helper.cluster(contextual_similarity_computer.constraints)
     _logger.info("Generality computed")
     store_preprocessed(config, contextual_similarity_computer.constraints, min_support, dict_filter, mark_redundant,
                        with_nat_lang)
     return contextual_similarity_computer
 
 
-def compute_relevance_for_log(config, constraints, nlp_helper, resource_handler, process, pd_log=None,
+def compute_relevance_for_log(config, constraints, nlp_helper, process, pd_log=None,
                               precompute=False):
     lh = LogHandler(config)
     if pd_log is None:
@@ -227,9 +227,9 @@ def compute_relevance_for_log(config, constraints, nlp_helper, resource_handler,
     resources_to_tasks = lh.get_resources_to_tasks()
     log_info = LogInfo(nlp_helper, labels, [process], resources_to_tasks)
     start_time = time.time()
-    relevance_computer = RelevanceComputer(config, nlp_helper, resource_handler, log_info)
+    relevance_computer = RelevanceComputer(config, nlp_helper, log_info)
     constraints = relevance_computer.compute_relevance(constraints, pre_compute=precompute)
-    nlp_helper.store_sims()
+    # nlp_helper.store_sims()
     _logger.info("Relevance computation took " + str(time.time() - start_time) + " seconds")
     return constraints
 
@@ -279,7 +279,7 @@ CURRENT_LOG_WS = "defaultview-2"
 CURRENT_LOG_FILE = "semconsttest.xes"
 
 if __name__ == "__main__":
-    conf = Config(Path(__file__).parents[2].resolve(), "sap_sam_filtered")
+    conf = Config(Path(__file__).parents[2].resolve(), "opal")
     filt_config = FilterConfig(conf)
     rec_config = RecommendationConfig(conf)
     run_full_extraction_pipeline(config=conf, process=CURRENT_LOG_FILE,

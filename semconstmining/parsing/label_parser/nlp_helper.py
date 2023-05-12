@@ -309,7 +309,7 @@ class NlpHelper:
             resource_handler.bpmn_model_elements.groupby(self.config.MODEL_ID)}
         self.model_id_to_unique_objects = resource_handler.components.all_objects_per_model
         self.model_id_to_unique_resources = resource_handler.components.all_resources_per_model
-        self.model_id_to_name = {model_id: group[self.config.NAME].unique() for model_id, group in
+        self.model_id_to_name = {model_id: list(group[self.config.NAME].unique()) for model_id, group in
                                  resource_handler.bpmn_models.groupby(self.config.MODEL_ID)}
         # combine all labels, objects and resources into a set with unique elements
         elements = set([element for model_id, labels in self.model_id_to_unique_labels.items() for element in labels] +

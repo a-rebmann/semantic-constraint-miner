@@ -202,10 +202,11 @@ def get_context_sim_computer(config, constraints, nlp_helper, resource_handler, 
     resource_handler
     """
     contextual_similarity_computer = ContextualSimilarityComputer(config, constraints, nlp_helper, resource_handler)
+    nlp_helper.store_sims()
     contextual_similarity_computer.compute_object_based_contextual_dissimilarity()
     contextual_similarity_computer.compute_label_based_contextual_dissimilarity()
-    #contextual_similarity_computer.compute_name_based_contextual_dissimilarity()
-    nlp_helper.store_sims()
+    contextual_similarity_computer.compute_name_based_contextual_dissimilarity()
+    nlp_helper.cluster(contextual_similarity_computer.constraints)
     _logger.info("Generality computed")
     store_preprocessed(config, contextual_similarity_computer.constraints, min_support, dict_filter, mark_redundant,
                        with_nat_lang)

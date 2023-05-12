@@ -14,12 +14,11 @@ import gensim.downloader as api
 from nltk.corpus import wordnet
 from sentence_transformers import SentenceTransformer, util
 from tqdm import tqdm
+import torch.multiprocessing as mp
 
 from semconstmining.mining.model.parsed_label import ParsedLabel
 from semconstmining.parsing.label_parser.bert_wrapper import BertWrapper
 from semconstmining.parsing.label_parser.bert_for_label_parsing import BertForLabelParsing
-from textblob.en import Spelling
-from textblob import TextBlob
 
 from semconstmining.config import Config
 from semconstmining.util.io import read_pickle, write_pickle
@@ -408,14 +407,15 @@ class NlpHelper:
         from concurrent.futures import ProcessPoolExecutor
         num_processes = multiprocessing.cpu_count() - 10
         _logger.info("Number of processes: {}".format(num_processes))
+        mp.set_start_method('spawn')
         with ProcessPoolExecutor(max_workers=num_processes) as executor:
             futures = []
             for batch in tqdm(sentence_batches):
                 futures.append(executor.submit(self.compute_sims, batch))
             _logger.info("Number of futures: {}".format(len(futures)))
-            for future in futures:
+            for future in tqdm(futures):
                 cosine_scores = future.result()
-                for batch in tqdm(sentence_batches):
+                for batch in sentence_batches:
                     for i, _ in enumerate(batch[0]):
                         self.known_sims[(batch[0][i], batch[1][i])] = float(cosine_scores[i])
 

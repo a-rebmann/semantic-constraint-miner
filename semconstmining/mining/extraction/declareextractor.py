@@ -157,7 +157,6 @@ class DeclareExtractor:
             d4py.compute_frequent_itemsets(min_support=0.0, len_itemset=2, algorithm="apriori")
             individual_res, associations = d4py.discovery(consider_vacuity=True, max_declare_cardinality=2)
             d4py.filter_discovery(min_support=self.config.DECLARE_SUPPORT)
-            # print(individual_res)
             if bo not in res:
                 res[bo] = set()
             res[bo].update(const for const, checker_results in individual_res.items() if "[]" not in const
@@ -167,6 +166,28 @@ class DeclareExtractor:
             all_associations[bo] = associations
         return (
             pd.DataFrame.from_records(self.get_object_constraints_flat(res, all_associations)).assign(
+                model_id=row_tuple.model_id).assign(
+                model_name=row_tuple.name)
+        )
+
+    def discover_plain_control_flow_constraints(self, row_tuple):
+        if row_tuple.log is None:
+            return None
+        d4py = Declare(self.config)
+        res = set()
+        log = row_tuple.log
+        for i, trace in enumerate(log):
+            trace.attributes["concept:name"] = str(i)
+        d4py.log = log
+        d4py.compute_frequent_itemsets(min_support=0.0, len_itemset=2, algorithm="apriori")
+        d4py.discovery(consider_vacuity=True, max_declare_cardinality=2, plain=True)
+        individual_res, associations = d4py.filter_discovery(min_support=self.config.DECLARE_SUPPORT, plain=True)
+        res.update(const for const, checker_results in individual_res.items() if "[]" not in const
+                   and "[none]" not in const
+                   and ''.join([i for i in const.split("[")[0] if not i.isdigit()]) not in
+                   self.config.CONSTRAINT_TYPES_TO_IGNORE)
+        return (
+            pd.DataFrame.from_records(self.get_constraints_flat(res, None)).assign(
                 model_id=row_tuple.model_id).assign(
                 model_name=row_tuple.name)
         )
@@ -305,8 +326,8 @@ class DeclareExtractor:
                 self.config.CONSTRAINT_STR: const,
                 self.config.OPERATOR_TYPE: self.config.BINARY if any(
                     temp in const for temp in self.config.BINARY_TEMPLATES) else self.config.UNARY,
-                self.config.DICTIONARY: associations[const][self.config.DICTIONARY],
-                self.config.DATA_OBJECT: associations[const][self.config.DATA_OBJECT],
+                self.config.DICTIONARY: associations[const][self.config.DICTIONARY] if associations is not None else [],
+                self.config.DATA_OBJECT: associations[const][self.config.DATA_OBJECT] if associations is not None else [],
                 self.config.TEMPLATE: _get_constraint_template(const)
                 } for const in res]
         for rec in res:

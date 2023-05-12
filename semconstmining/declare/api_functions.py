@@ -126,6 +126,8 @@ def discover_constraint(log, constraint, consider_vacuity):
     discovery_res = {}
 
     for i, trace in enumerate(log):
+        if len(trace) == 0:
+            continue
         trc_res = check_trace_conformance(trace, model, consider_vacuity)
         if not trc_res:  # Occurring when constraint data conditions are formatted bad
             break

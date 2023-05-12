@@ -384,7 +384,7 @@ class Declare:
         return self.conformance_checking_results
 
     def discovery(self, consider_vacuity: bool, max_declare_cardinality: int = 3, output_path: str = None,
-                  do_unary=True) \
+                  do_unary=True, plain=False) \
             -> dict[str: dict[tuple[int, str]: CheckerResult]]:
         """
         Performs discovery of the supported DECLARE templates for the provided log by using the computed frequent item
@@ -450,17 +450,18 @@ class Declare:
             with open(output_path, 'w') as f:
                 f.write(activities_decl_format)
                 f.write('\n'.join(self.discovery_results.keys()))
-        for key in self.discovery_results:
-            for trace in self.log:
-                for event in trace:
-                    if event[self.config.XES_NAME] in key:
-                        if key not in self.associated_entities:
-                            self.associated_entities[key] = {self.config.DICTIONARY: set(), self.config.DATA_OBJECT: set()}
-                        self.associated_entities[key][self.config.DICTIONARY].update(event[self.config.DICTIONARY])
-                        self.associated_entities[key][self.config.DATA_OBJECT].update(event[self.config.DATA_OBJECT])
+        if not plain:
+            for key in self.discovery_results:
+                for trace in self.log:
+                    for event in trace:
+                        if event[self.config.XES_NAME] in key:
+                            if key not in self.associated_entities:
+                                self.associated_entities[key] = {self.config.DICTIONARY: set(), self.config.DATA_OBJECT: set()}
+                            self.associated_entities[key][self.config.DICTIONARY].update(event[self.config.DICTIONARY])
+                            self.associated_entities[key][self.config.DATA_OBJECT].update(event[self.config.DATA_OBJECT])
         return self.discovery_results, self.associated_entities
 
-    def filter_discovery(self, min_support: float = 0, output_path: str = None) \
+    def filter_discovery(self, min_support: float = 0, output_path: str = None, plain=False) \
             -> dict[str: dict[tuple[int, str]: CheckerResult]]:
         """
         Filters discovery results by means of minimum support.
@@ -493,7 +494,8 @@ class Declare:
             support = len(val) / len(self.log)
             if support >= min_support:
                 result[key] = val
-                associated_entities[key] = self.associated_entities[key]
+                if not plain:
+                    associated_entities[key] = self.associated_entities[key]
 
         if output_path is not None:
             with open(output_path, 'w') as f:

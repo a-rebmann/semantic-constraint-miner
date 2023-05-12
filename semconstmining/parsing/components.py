@@ -34,12 +34,14 @@ class Components:
     def add_object(self, model_id, obj):
         if model_id not in self.all_objects_per_model:
             self.all_objects_per_model[model_id] = set()
-        self.all_objects_per_model[model_id].add(obj)
+        if obj != "":
+            self.all_objects_per_model[model_id].add(obj)
 
     def add_resource(self, model_id, resource):
         if model_id not in self.all_resources_per_model:
             self.all_resources_per_model[model_id] = set()
-        self.all_resources_per_model[model_id].add(resource)
+        if resource != "":
+            self.all_resources_per_model[model_id].add(resource)
 
     def add_task_to_resource(self, model_id, task, resource):
         if model_id not in self.task_per_resource_per_model:

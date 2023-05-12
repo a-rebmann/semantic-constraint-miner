@@ -304,8 +304,10 @@ class NlpHelper:
                 and action not in self.config.TERMS_FOR_MISSING]
 
     def precompute_embeddings_and_sims(self, resource_handler, sims=False):
-        self.model_id_to_unique_labels = {model_id: group[self.config.CLEANED_LABEL].unique() for model_id, group in
-                                          resource_handler.bpmn_model_elements.groupby(self.config.MODEL_ID)}
+        self.model_id_to_unique_labels = {
+            model_id: [elm for elm in group[self.config.CLEANED_LABEL].dropna().unique() if elm != ''] for
+            model_id, group in
+            resource_handler.bpmn_model_elements.groupby(self.config.MODEL_ID)}
         self.model_id_to_unique_objects = resource_handler.components.all_objects_per_model
         self.model_id_to_unique_resources = resource_handler.components.all_resources_per_model
         self.model_id_to_name = {model_id: group[self.config.NAME].unique() for model_id, group in
@@ -370,9 +372,10 @@ class NlpHelper:
                 new_pairs = unique_pairs - resource_pairs
                 # Add the new pairs to the set of resource pairs
                 resource_pairs |= new_pairs
-            self.compute_sims(label_pairs)
-            self.compute_sims(object_pairs)
-            self.compute_sims(resource_pairs)
+            _logger.info("Number of resource pairs: {}".format(len(resource_pairs)))
+            self.compute_sims_multi_processing(label_pairs)
+            self.compute_sims_multi_processing(object_pairs)
+            self.compute_sims_multi_processing(resource_pairs)
             self.store_sims()
 
     def pre_compute_embeddings(self, sentences):
@@ -386,36 +389,49 @@ class NlpHelper:
                                   sent not in self.known_embeddings}
 
     def compute_sims(self, params):
+        embeddings1 = [self.known_embeddings[sent] for sent in params[0]]
+        embeddings2 = [self.known_embeddings[sent] for sent in params[1]]
+        cosine_scores = [float(util.cos_sim(embedding1, embedding2)) for embedding1, embedding2 in
+                         zip(embeddings1, embeddings2)]
+        return cosine_scores
+
+    def compute_sims_multi_processing(self, params):
         sentences1 = [combi[0] for combi in params]
         sentences2 = [combi[1] for combi in params]
-
         num_sentences = len(sentences1)
-        num_processes = multiprocessing.cpu_count() - 1
-
         # Split the sentences into equal parts
-        batch_size = num_sentences // len(params)
+        batch_size = 70000
         sentence_batches = [(sentences1[i:i + batch_size], sentences2[i:i + batch_size])
                             for i in range(0, num_sentences, batch_size)]
 
         # Compute cosine-similarities
-        for batch in tqdm(sentence_batches):
-            embeddings1 = [self.known_embeddings[sent] for sent in batch[0]]
-            embeddings2 = [self.known_embeddings[sent] for sent in batch[1]]
-            cosine_scores = [float(util.cos_sim(embedding1, embedding2)) for embedding1, embedding2 in
-                             zip(embeddings1, embeddings2)]
-            for i, _ in tqdm(enumerate(batch[0])):
-                self.known_sims[(batch[0][i], batch[1][i])] = float(cosine_scores[i])
+        from concurrent.futures import ProcessPoolExecutor
+        num_processes = multiprocessing.cpu_count() - 10
+        _logger.info("Number of processes: {}".format(num_processes))
+        with ProcessPoolExecutor(max_workers=num_processes) as executor:
+            futures = []
+            for batch in tqdm(sentence_batches):
+                futures.append(executor.submit(self.compute_sims, batch))
+            _logger.info("Number of futures: {}".format(len(futures)))
+            for future in futures:
+                cosine_scores = future.result()
+                for batch in tqdm(sentence_batches):
+                    for i, _ in enumerate(batch[0]):
+                        self.known_sims[(batch[0][i], batch[1][i])] = float(cosine_scores[i])
 
     def replace_stuff(self, x):
         res = x[self.config.NAT_LANG_TEMPLATE].replace("{1}", x[self.config.LEFT_OPERAND]) if x[
-                                                                                                 self.config.LEFT_OPERAND] != "" else x[
+                                                                                                  self.config.LEFT_OPERAND] != "" else \
+        x[
             self.config.NAT_LANG_TEMPLATE]
         if not pd.isna(x[self.config.RIGHT_OPERAND]) and x[self.config.RIGHT_OPERAND] != "":
             res += res.replace("{2}", x[self.config.RIGHT_OPERAND])
-        return res
+        return res, x.index
 
     def cluster(self, constraints):
-        sentences = constraints.apply(lambda x: self.replace_stuff(x), axis=1).tolist()
+        sentences_and_ids = constraints.apply(lambda x: self.replace_stuff(x), axis=1).tolist()
+        sentences = [sent_and_id[0] for sent_and_id in sentences_and_ids]
+        ids = [sent_and_id[1] for sent_and_id in sentences_and_ids]
         corpus_sentences = list(sentences)
         _logger.info("Encode the corpus. This might take a while")
         corpus_embeddings = self.sent_model.encode(corpus_sentences, batch_size=64, show_progress_bar=True,
@@ -429,7 +445,7 @@ class NlpHelper:
         clusters = util.community_detection(corpus_embeddings, min_community_size=1000, threshold=0.5)
 
         _logger.info("Clustering done after {:.2f} sec".format(time.time() - start_time))
-
+        constraints[self.config.CLUSTER] = -1
         # Print for all clusters the top 3 and bottom 3 elements
         for i, cluster in enumerate(clusters):
             _logger.info("\nCluster {}, #{} Elements ".format(i + 1, len(cluster)))
@@ -438,6 +454,8 @@ class NlpHelper:
             _logger.info("\t", "...")
             for sentence_id in cluster[-3:]:
                 _logger.info("\t", corpus_sentences[sentence_id])
+            for sentence_id in cluster:
+                constraints.at[ids[sentence_id], self.config.CLUSTER] = i + 1
 
 
 if __name__ == '__main__':

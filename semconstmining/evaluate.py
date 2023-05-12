@@ -327,7 +327,7 @@ if __name__ == '__main__':
     _logger.info("Loading constraints")
     all_constraints = get_or_mine_constraints(conf, resource_handler)
     _logger.info("Loading generality scores")
-    all_constraints = all_constraints.drop(columns=[conf.LABEL_BASED_GENERALITY, conf.OBJECT_BASED_GENERALITY])
+    # all_constraints = all_constraints.drop(columns=[conf.LABEL_BASED_GENERALITY, conf.OBJECT_BASED_GENERALITY])
     # nlp_helper.cluster(all_constraints)
     all_constraints = get_context_sim_computer(conf, all_constraints, nlp_helper, resource_handler).constraints
     _logger.info("Loading logs")

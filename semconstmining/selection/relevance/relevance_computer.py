@@ -1,3 +1,4 @@
+import itertools
 import logging
 
 import pandas as pd
@@ -10,6 +11,7 @@ class RelevanceComputer:
     def __init__(self, config, nlp_helper, log_info):
         self.config = config
         self.nlp_helper = nlp_helper
+        self.sims = {}
         self.log_info = log_info
         self.counter = 0
 
@@ -18,12 +20,12 @@ class RelevanceComputer:
         constraints = constraints.copy(deep=True)
         if pre_compute:
             self.nlp_helper.pre_compute_embeddings(sentences=self.log_info.labels + self.log_info.names + list(self.log_info.resources_to_tasks.keys()) + self.log_info.objects + self.log_info.actions)
-
+        self.sims = self.precompute_sims(constraints)
         constraints[self.config.INDIVIDUAL_RELEVANCE_SCORES] = \
             constraints.apply(lambda row: self._compute_relevance(row), axis=1)
         constraints[self.config.SEMANTIC_BASED_RELEVANCE] = constraints.apply(lambda row: self.get_max_scores(row),
                                                                               axis=1)
-        self.nlp_helper.store_sims()
+        #self.nlp_helper.store_sims()
         return constraints
 
     def _compute_relevance(self, row):
@@ -117,3 +119,20 @@ class RelevanceComputer:
             if new_score > score:
                 score = new_score
         return score
+
+    def precompute_sims(self, constraints):
+        objects = list(constraints[constraints[self.config.LEVEL] == self.config.OBJECT][self.config.OBJECT].dropna().unique())
+        objects += list(constraints[constraints[self.config.LEVEL] == self.config.MULTI_OBJECT][self.config.LEFT_OPERAND].dropna().unique())
+        objects += list(constraints[constraints[self.config.LEVEL] == self.config.MULTI_OBJECT][self.config.RIGHT_OPERAND].dropna().unique())
+        labels = list(constraints[constraints[self.config.LEVEL] == self.config.ACTIVITY][self.config.LEFT_OPERAND].dropna().unique())
+        labels += list(constraints[constraints[self.config.LEVEL] == self.config.ACTIVITY][self.config.RIGHT_OPERAND].dropna().unique())
+        labels += list(constraints[constraints[self.config.LEVEL] == self.config.RESOURCE][self.config.LEFT_OPERAND].dropna().unique())
+        resources = list(constraints[constraints[self.config.LEVEL] == self.config.RESOURCE][self.config.OBJECT].dropna().unique())
+        object_combis = [(x, y) for x, y in itertools.product(objects, self.log_info.objects) if x != y]
+        label_combis = [(x, y) for x, y in itertools.product(labels, self.log_info.labels) if x != y]
+        resource_combis = [(x, y) for x, y in itertools.product(resources, self.log_info.resources_to_tasks) if x != y]
+        _logger.info("Precomputing similarities for {} object combinations, {} label combinations and {} resource combinations".format(len(object_combis), len(label_combis), len(resource_combis)))
+        sims = self.nlp_helper.get_sims(object_combis)
+        sims += self.nlp_helper.get_sims(label_combis)
+        sims += self.nlp_helper.get_sims(resource_combis)
+        return {x: y for x, y in zip(object_combis + label_combis + resource_combis, sims)}

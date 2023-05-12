@@ -20,6 +20,7 @@ from semconstmining.declare.enums import Template
 import torch.multiprocessing as mp
 from semconstmining.main import get_resource_handler, get_or_mine_constraints, get_context_sim_computer, \
     compute_relevance_for_log, recommend_constraints_for_log, check_constraints
+from semconstmining.mining.aggregation.subsumptionanalyzer import SubsumptionAnalyzer
 from semconstmining.mining.extraction.extractionhandler import ExtractionHandler
 from semconstmining.mining.extraction.modelextractor import ModelExtractor
 from semconstmining.parsing.label_parser.nlp_helper import NlpHelper
@@ -263,7 +264,7 @@ def evaluate_single_run(config, config_index, log_id, true_violations_per_type, 
     fn = 0
     for const_type, violations in violations_per_type.items():
         if const_type == config.OBJECT:
-            for obj_type, obj_violations in violations.tems():
+            for obj_type, obj_violations in violations.items():
                 for case, case_violations in obj_violations.items():
                     for violation in case_violations:
                         if obj_type not in true_violations_per_type[const_type]:
@@ -370,6 +371,16 @@ if __name__ == '__main__':
     nlp_helper = NlpHelper(conf)
     resource_handler = get_resource_handler(conf, nlp_helper)
     base_constraints = ExtractionHandler(conf, resource_handler).get_all_observations()
+    base_constraints[conf.SUPPORT] = 1
+    grouped = base_constraints.groupby(conf.MODEL_ID)
+    dfs = []
+    for group_id, group in tqdm(grouped):
+        subsumption_analyzer = SubsumptionAnalyzer(conf, group)
+        subsumption_analyzer.check_refinement()
+        subsumption_analyzer.check_subsumption()
+        subsumption_analyzer.check_equal()
+        dfs.append(subsumption_analyzer.constraints[~subsumption_analyzer.constraints[conf.REDUNDANT]])
+    base_constraints = pd.concat(dfs)
     _logger.info("Loading constraints")
     all_constraints = get_or_mine_constraints(conf, resource_handler)
     _logger.info("Loading generality scores")

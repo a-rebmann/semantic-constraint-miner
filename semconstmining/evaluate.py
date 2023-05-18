@@ -326,9 +326,9 @@ def run_configuration(config_index, constraints, logs, base_const, r_config, nlp
     eval_results = []
     if multi_process:
         from concurrent.futures import ProcessPoolExecutor
-        num_processes = multiprocessing.cpu_count() - 1
+        num_processes = multiprocessing.cpu_count() - 10
         _logger.info("Number of processes: {}".format(num_processes))
-        split_df = np.array_split(constraints, len(logs) // num_processes)
+        split_df = np.array_split(logs, num_processes)
         with ProcessPoolExecutor(max_workers=num_processes) as executor:
             futures = []
             for batch in tqdm(split_df):
@@ -421,7 +421,7 @@ LOG_SIZE = 100
 NOISY_TRACE_PROB = 0.5
 NOISY_EVENT_PROB = 0.5
 
-MULTI_PROCESS = False
+MULTI_PROCESS = True
 
 
 def prepare_subset():

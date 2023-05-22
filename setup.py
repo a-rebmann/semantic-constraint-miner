@@ -21,7 +21,7 @@ setup(
         'matplotlib',
         'psutil',
         'requests==2.28.1',
-        'transformers==4.9.2',
+        'transformers==4.29.2',
         'pytorch-transformers==1.2.0',
         'torch==1.9.0',
         'six==1.16.0',

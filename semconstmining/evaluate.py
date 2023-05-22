@@ -421,7 +421,7 @@ LOG_SIZE = 100
 NOISY_TRACE_PROB = 0.5
 NOISY_EVENT_PROB = 0.5
 
-MULTI_PROCESS = True
+MULTI_PROCESS = False
 
 
 def prepare_subset():

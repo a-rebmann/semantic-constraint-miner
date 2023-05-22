@@ -40,7 +40,7 @@ setup(
         'sentence_transformers==2.2.0',
         'mlxtend==0.21.0',
         'func-timeout==4.3.5',
-        'cvxopt==1.3.0',
+        'cvxopt==1.3.1',
         'pm4py==2.5.1',
         'gensim==4.1.2',
         "pylogics==0.1.1",

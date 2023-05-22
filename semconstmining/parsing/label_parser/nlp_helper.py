@@ -428,7 +428,38 @@ class NlpHelper:
             res += res.replace("{2}", x[self.config.RIGHT_OPERAND])
         return res, x.index
 
-    def cluster(self, constraints):
+    def cluster(self, id_to_sentence):
+        ids, sentences = zip(*id_to_sentence.items())
+        ids = list(ids)
+        sentences = list(sentences)
+        _logger.info("Encode the corpus. This might take a while")
+        corpus_embeddings = self.sent_model.encode(sentences, batch_size=64, show_progress_bar=True,
+                                                   convert_to_tensor=True)
+        _logger.info("Start clustering")
+        start_time = time.time()
+        # Two parameters to tune:
+        # min_cluster_size: Only consider cluster that have at least 25 elements
+        # threshold: Consider sentence pairs with a cosine-similarity larger than threshold as similar
+        clusters = util.community_detection(corpus_embeddings, min_community_size=25,
+                                            threshold=0.7)
+
+        _logger.info("Clustering done after {:.2f} sec".format(time.time() - start_time))
+        cluster_to_ids = {}
+        # Print for all clusters the top 3 and bottom 3 elements
+        for i, cluster in enumerate(clusters):
+            _logger.info("\nCluster {}, #{} Elements ".format(i + 1, len(cluster)))
+            for sentence_id in cluster[0:3]:
+                _logger.info("\t", sentences[sentence_id])
+            _logger.info("\t", "...")
+            for sentence_id in cluster[-3:]:
+                _logger.info("\t", sentences[sentence_id])
+            for sentence_id in cluster:
+                if i not in cluster_to_ids:
+                    cluster_to_ids[i] = []
+                cluster_to_ids[i].append(ids[sentence_id])
+        return cluster_to_ids
+
+    def cluster_constraints(self, constraints):
         sentences_and_ids = constraints.apply(lambda x: self.replace_stuff(x), axis=1).tolist()
         sentences = [sent_and_id[0] for sent_and_id in sentences_and_ids]
         ids = [sent_and_id[1] for sent_and_id in sentences_and_ids]
@@ -442,7 +473,7 @@ class NlpHelper:
         # Two parameters to tune:
         # min_cluster_size: Only consider cluster that have at least 25 elements
         # threshold: Consider sentence pairs with a cosine-similarity larger than threshold as similar
-        clusters = util.community_detection(corpus_embeddings, min_community_size=1000, threshold=0.5)
+        clusters = util.community_detection(corpus_embeddings, min_community_size=1000, threshold=0.75)
 
         _logger.info("Clustering done after {:.2f} sec".format(time.time() - start_time))
         constraints[self.config.CLUSTER] = -1

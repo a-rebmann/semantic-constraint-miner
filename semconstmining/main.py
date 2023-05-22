@@ -42,6 +42,24 @@ _logger = logging.getLogger(__name__)
 ONLY_ENGLISH = True
 
 
+def get_parts_of_constraints(config, constraints: DataFrame):
+    objects = list(
+        constraints[constraints[config.LEVEL] == config.OBJECT][config.OBJECT].dropna().unique())
+    objects += list(constraints[constraints[config.LEVEL] == config.MULTI_OBJECT][
+                        config.LEFT_OPERAND].dropna().unique())
+    objects += list(constraints[constraints[config.LEVEL] == config.MULTI_OBJECT][
+                        config.RIGHT_OPERAND].dropna().unique())
+    labels = list(
+        constraints[constraints[config.LEVEL] == config.ACTIVITY][config.LEFT_OPERAND].dropna().unique())
+    labels += list(constraints[constraints[config.LEVEL] == config.ACTIVITY][
+                       config.RIGHT_OPERAND].dropna().unique())
+    labels += list(
+        constraints[constraints[config.LEVEL] == config.RESOURCE][config.LEFT_OPERAND].dropna().unique())
+    resources = list(
+        constraints[constraints[config.LEVEL] == config.RESOURCE][config.OBJECT].dropna().unique())
+    return objects + labels + resources
+
+
 def get_log_info(config: Config):
     log_infos = {} if not exists(config.DATA_INTERIM / config.LOG_INFO) else read_pickle(
         config.DATA_INTERIM / config.LOG_INFO)
@@ -259,7 +277,7 @@ def run_full_extraction_pipeline(config: Config, process: str, filter_config: Fi
     nlp_helper = NlpHelper(config)
     resource_handler = get_resource_handler(config, nlp_helper)
     all_constraints = get_or_mine_constraints(config, resource_handler)
-    get_context_sim_computer(config, all_constraints, nlp_helper, resource_handler)
+    # get_context_sim_computer(config, all_constraints, nlp_helper, resource_handler) # not part of this version
     # Filter constraints (optional)
     const_filter = ConstraintFilter(config, filter_config, resource_handler)
     filtered_constraints = const_filter.filter_constraints(all_constraints)
@@ -270,8 +288,14 @@ def run_full_extraction_pipeline(config: Config, process: str, filter_config: Fi
                                                             process)
     consistency_checker = ConsistencyChecker(config)
     inconsistent_subsets = consistency_checker.check_consistency(recommended_constraints)
+    if len(inconsistent_subsets) > 0:
+        consistent_recommended_constraints = consistency_checker.make_set_consistent_max_relevance(
+            recommended_constraints,
+            inconsistent_subsets)
+    else:
+        consistent_recommended_constraints = recommended_constraints
     # TODO ask user to select correction set, or just recommend subset where least relevant correction set is removed
-    violations = check_constraints(config, process, recommended_constraints, nlp_helper)
+    violations = check_constraints(config, process, consistent_recommended_constraints, nlp_helper)
     _logger.info("Done")
 
 

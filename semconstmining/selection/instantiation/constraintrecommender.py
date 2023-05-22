@@ -85,8 +85,28 @@ class ConstraintRecommender:
         constraints[self.config.RELEVANCE_SCORE] = 0.0
         relevance_func = self.recommender_config.get_lambda_function(constraints)
         constraints[self.config.RELEVANCE_SCORE] = constraints.apply(relevance_func, axis=1)
-        constraints = pd.concat([constraints[constraints[self.config.OPERATOR_TYPE] == self.config.UNARY].nlargest(self.recommender_config.top_k, [self.config.RELEVANCE_SCORE]),
-                                constraints[constraints[self.config.OPERATOR_TYPE] == self.config.BINARY].nlargest(self.recommender_config.top_k, [self.config.RELEVANCE_SCORE])])
+        constraints = pd.concat([constraints[(constraints[self.config.OPERATOR_TYPE] == self.config.UNARY) &
+                                             (constraints[self.config.LEVEL] == self.config.ACTIVITY)].nlargest(
+                                    self.recommender_config.top_k, [self.config.RELEVANCE_SCORE]),
+                                 constraints[(constraints[self.config.OPERATOR_TYPE] == self.config.BINARY) &
+                                             (constraints[self.config.LEVEL] == self.config.ACTIVITY)].nlargest(
+                                     self.recommender_config.top_k, [self.config.RELEVANCE_SCORE]),
+                                 constraints[(constraints[self.config.OPERATOR_TYPE] == self.config.UNARY) &
+                                             (constraints[self.config.LEVEL] == self.config.OBJECT)].nlargest(
+                                     self.recommender_config.top_k, [self.config.RELEVANCE_SCORE]),
+                                 constraints[(constraints[self.config.OPERATOR_TYPE] == self.config.BINARY) &
+                                             (constraints[self.config.LEVEL] == self.config.OBJECT)].nlargest(
+                                     self.recommender_config.top_k, [self.config.RELEVANCE_SCORE]),
+                                 constraints[(constraints[self.config.OPERATOR_TYPE] == self.config.UNARY) &
+                                             (constraints[self.config.LEVEL] == self.config.MULTI_OBJECT)].nlargest(
+                                     self.recommender_config.top_k, [self.config.RELEVANCE_SCORE]),
+                                 constraints[(constraints[self.config.OPERATOR_TYPE] == self.config.BINARY) &
+                                             (constraints[self.config.LEVEL] == self.config.MULTI_OBJECT)].nlargest(
+                                     self.recommender_config.top_k, [self.config.RELEVANCE_SCORE]),
+                                 constraints[(constraints[self.config.OPERATOR_TYPE] == self.config.UNARY) &
+                                             (constraints[self.config.LEVEL] == self.config.RESOURCE)].nlargest(
+                                     self.recommender_config.top_k, [self.config.RELEVANCE_SCORE])
+                                 ])
         return constraints
 
     def non_conflicting_max_relevance(self, constraints, recommender_config: RecommendationConfig):

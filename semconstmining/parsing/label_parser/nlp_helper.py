@@ -9,7 +9,6 @@ from os.path import exists
 from pathlib import Path
 
 import pandas as pd
-import spacy
 import gensim.downloader as api
 from nltk.corpus import wordnet
 from sentence_transformers import SentenceTransformer, util
@@ -78,6 +77,7 @@ class NlpHelper:
         self.config = config
         self.model = BertWrapper.load_serialized(config.MODEL_PATH, BertForLabelParsing)
         self.parse_map = {}
+        import spacy
         self.nlp = spacy.load(self.config.SPACY_MODEL)
         self.glove_embeddings = api.load(self.config.WORD_EMBEDDINGS)
         # reference to the sentence model used (default SentenceTransformer)

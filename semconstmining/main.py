@@ -282,7 +282,7 @@ def run_full_extraction_pipeline(config: Config, process: str, filter_config: Fi
     const_filter = ConstraintFilter(config, filter_config, resource_handler)
     filtered_constraints = const_filter.filter_constraints(all_constraints)
     # Log-specific constraint recommendation
-    filtered_constraints = compute_relevance_for_log(config, filtered_constraints, nlp_helper, resource_handler,
+    filtered_constraints = compute_relevance_for_log(config, filtered_constraints, nlp_helper,
                                                      process)
     recommended_constraints = recommend_constraints_for_log(config, recommender_config, filtered_constraints, nlp_helper,
                                                             process)
@@ -303,7 +303,7 @@ CURRENT_LOG_WS = "defaultview-2"
 CURRENT_LOG_FILE = "semconsttest.xes"
 
 if __name__ == "__main__":
-    conf = Config(Path(__file__).parents[2].resolve(), "opal")
+    conf = Config(Path(__file__).parents[2].resolve(), "sap_sam_filtered_2500")
     filt_config = FilterConfig(conf)
     rec_config = RecommendationConfig(conf)
     run_full_extraction_pipeline(config=conf, process=CURRENT_LOG_FILE,

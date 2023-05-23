@@ -303,7 +303,7 @@ CURRENT_LOG_WS = "defaultview-2"
 CURRENT_LOG_FILE = "semconsttest.xes"
 
 if __name__ == "__main__":
-    conf = Config(Path(__file__).parents[2].resolve(), "sap_sam_filtered_2500")
+    conf = Config(Path(__file__).parents[2].resolve(), "opal")
     filt_config = FilterConfig(conf)
     rec_config = RecommendationConfig(conf)
     run_full_extraction_pipeline(config=conf, process=CURRENT_LOG_FILE,

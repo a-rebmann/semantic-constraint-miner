@@ -37,7 +37,7 @@ setup(
         'spacy_langdetect==0.1.2',
         'language_data==1.1',
         'metric-temporal-logic==0.4.0',
-        'sentence_transformers==2.2.0',
+        'sentence_transformers==2.2.2',
         'mlxtend==0.21.0',
         'func-timeout==4.3.5',
         'cvxopt==1.3.1',

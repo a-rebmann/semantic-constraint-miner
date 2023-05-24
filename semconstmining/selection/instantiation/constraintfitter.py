@@ -54,8 +54,11 @@ class ConstraintFitter:
         if old_act is not None and new_act is not None:
             if old_act == record[self.config.LEFT_OPERAND]:
                 record[self.config.LEFT_OPERAND] = new_act
+                record[self.config.CONSTRAINT_STR] = row[self.config.CONSTRAINT_STR].replace(
+                    row[self.config.LEFT_OPERAND], new_act)
             if old_act == record[self.config.RIGHT_OPERAND]:
-                record[self.config.RIGHT_OPERAND] = new_act
+                record[self.config.CONSTRAINT_STR] = row[self.config.CONSTRAINT_STR].replace(
+                    row[self.config.RIGHT_OPERAND], new_act)
         return record
 
     def fit_object_constraint(self, row, sim_threshold):

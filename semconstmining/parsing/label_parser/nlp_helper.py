@@ -111,6 +111,7 @@ class NlpHelper:
         return new_pred
 
     def parse_label(self, label, print_outcome=False):
+        label = sanitize_label(label)
         if label in self.parse_map:
             return self.parse_map[label]
         split, tags = self.predict_single_label(label)
@@ -186,19 +187,19 @@ class NlpHelper:
         for token in doc:
             if token.tag_.startswith("VB"):
                 present_tense_verbs.add(token.lemma_)
-        if not present_tense_verbs:
-            related_verbs = list()
-            if word in self.glove_embeddings.key_to_index:
-                related_words = self.glove_embeddings.most_similar(word, topn=1000)
-                related_verbs.extend([w for w, score in related_words])
-            for verb in related_verbs:
-                doc = self.nlp(verb)
-                for tok in doc:
-                    if tok.tag_.startswith("VB"):
-                        present_tense_verbs.add(tok.lemma_)
-                # present_tense_verbs.update(tok.lemma_ for tok in doc if tok.tag_.startswith("VB"))
-                if len(present_tense_verbs) > 0:
-                    break
+        # if not present_tense_verbs:
+        #     related_verbs = list()
+        #     if word in self.glove_embeddings.key_to_index:
+        #         related_words = self.glove_embeddings.most_similar(word, topn=1000)
+        #         related_verbs.extend([w for w, score in related_words])
+        #     for verb in related_verbs:
+        #         doc = self.nlp(verb)
+        #         for tok in doc:
+        #             if tok.tag_.startswith("VB"):
+        #                 present_tense_verbs.add(tok.lemma_)
+        #         # present_tense_verbs.update(tok.lemma_ for tok in doc if tok.tag_.startswith("VB"))
+        #         if len(present_tense_verbs) > 0:
+        #             break
         if present_tense_verbs:
             return " ".join(present_tense_verbs)
         else:

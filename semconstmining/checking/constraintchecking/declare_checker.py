@@ -13,6 +13,12 @@ import pm4py
 from semconstmining.parsing.label_parser.nlp_helper import NlpHelper
 
 
+def verify_violations(tmp_res, log):
+    counts = Counter(const for vals in tmp_res.values() for const in vals)
+    res = {key: {val for val in vals if counts[val] < len(log)} for key, vals in tmp_res.items()}
+    return res
+
+
 class DeclareChecker:
 
     def __init__(self, config, lh: LogHandler, constraints: DataFrame, nlp_helper: NlpHelper):
@@ -61,7 +67,7 @@ class DeclareChecker:
             constraint_strings = self.get_constraint_strings(level=self.config.OBJECT)
             d4py.model = parse_decl(constraint_strings.keys())
             tmp_res = d4py.conformance_checking(consider_vacuity=True)
-            res[bo] = self.verify_violations(tmp_res, d4py.log)
+            res[bo] = verify_violations(tmp_res, d4py.log)
         return res
 
     def check_multi_object_constraints(self):
@@ -72,7 +78,7 @@ class DeclareChecker:
         constraint_strings = self.get_constraint_strings(level=self.config.MULTI_OBJECT)
         d4py.model = parse_decl(constraint_strings.keys())
         tmp_res = d4py.conformance_checking(consider_vacuity=True)
-        return self.verify_violations(tmp_res, d4py.log)
+        return verify_violations(tmp_res, d4py.log)
 
     def check_activity_level_constraints(self):
         filtered_traces = self.get_filtered_traces(self.log, parsed_tasks=self.activities_to_parsed,
@@ -82,7 +88,7 @@ class DeclareChecker:
         constraint_strings = self.get_constraint_strings(level=self.config.ACTIVITY)
         d4py.model = parse_decl(constraint_strings.keys())
         tmp_res = d4py.conformance_checking(consider_vacuity=True)
-        return self.verify_violations(tmp_res, d4py.log)
+        return verify_violations(tmp_res, d4py.log)
 
     def check_resource_level_constraints(self):
         filtered_traces = self.get_filtered_traces(self.log, parsed_tasks=self.activities_to_parsed,
@@ -92,20 +98,18 @@ class DeclareChecker:
         constraint_strings = self.get_constraint_strings(level=self.config.RESOURCE)
         d4py.model = parse_decl(constraint_strings.keys())
         tmp_res = d4py.conformance_checking(consider_vacuity=True)
-        return self.verify_violations(tmp_res, d4py.log)
+        return verify_violations(tmp_res, d4py.log)
 
     def has_loop(self, trace):
         return trace[self.config.XES_NAME].nunique() > len(trace)
 
     def get_filtered_traces(self, log: DataFrame, parsed_tasks=None, with_loops=False):
         if parsed_tasks is not None:
-            res = {trace_id:
-                       [parsed_tasks[event[self.config.XES_NAME]] if event[
+            res = {trace_id: [parsed_tasks[event[self.config.XES_NAME]] if event[
                                                                          self.config.XES_NAME] in parsed_tasks else get_dummy(
                            self.config, event[self.config.XES_NAME], self.config.EN)
                         for event_index, event in
-                        trace.iterrows()] for trace_id, trace in log.groupby(self.config.XES_CASE) if
-                    with_loops or not self.has_loop(trace)}
+                        trace.iterrows()] for trace_id, trace in log.groupby(self.config.XES_CASE) if with_loops or not self.has_loop(trace)}
             return res
         else:
             res = {trace_id: [event[self.config.XES_NAME] for event_idx, event in trace.iterrows()] for trace_id, trace
@@ -181,9 +185,4 @@ class DeclareChecker:
             if len(tmp_trace) > 0:
                 projection.append(tmp_trace)
         return projection
-
-    def verify_violations(self, tmp_res, log):
-        counts = Counter(const for vals in tmp_res.values() for const in vals)
-        res = {key: {val for val in vals if counts[val] < len(log)} for key, vals in tmp_res.items()}
-        return res
 

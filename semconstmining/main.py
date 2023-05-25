@@ -232,7 +232,7 @@ def get_context_sim_computer(config, constraints, nlp_helper, resource_handler, 
 
 
 def compute_relevance_for_log(config, constraints, nlp_helper, process, pd_log=None,
-                              precompute=False):
+                              precompute=True):
     lh = LogHandler(config)
     if pd_log is None:
         pd_log = lh.read_log(config.DATA_LOGS, process)
@@ -271,36 +271,98 @@ def recommend_constraints_for_log(config, rec_config, constraints, nlp_helper, p
     return fitted_constraints
 
 
+def get_log_and_info(conf, nlp_helper, process):
+    log_handler = LogHandler(conf)
+    event_log = log_handler.read_log(conf.DATA_LOGS, process)
+    labels = list(event_log[conf.XES_NAME].unique())
+    resources_to_tasks = log_handler.get_resources_to_tasks()
+    log_info = LogInfo(nlp_helper, labels, [CURRENT_LOG_FILE], resources_to_tasks)
+    return event_log, log_info
+
+
+def filter_violations(violations):
+    recs = []
+    for const_type, violations in violations.items():
+        if const_type == conf.OBJECT:
+            for obj_type, obj_violations in violations.items():
+                for case, case_violations in obj_violations.items():
+                    if len(case_violations) > 0:
+                        recs.append({"case": case, "obj": obj_type, "violations": case_violations})
+        else:
+            for case, case_violations in violations.items():
+                if len(case_violations) > 0:
+                    recs.append({"case": case, "obj": "", "violations": case_violations})
+    res = pd.DataFrame.from_records(recs)
+    return res
+
+
+def get_violation_to_cases(violations):
+    violation_to_cases = {}
+    for const_type, violations in violations.items():
+        if const_type == conf.OBJECT:
+            for obj_type, obj_violations in violations.items():
+                for case, case_violations in obj_violations.items():
+                    if len(case_violations) > 0:
+                        for violation in case_violations:
+                            if violation+obj_type not in violation_to_cases:
+                                violation_to_cases[violation+obj_type] = []
+                            violation_to_cases[violation+obj_type].append(case)
+        else:
+            for case, case_violations in violations.items():
+                if len(case_violations) > 0:
+                    for violation in case_violations:
+                        if violation not in violation_to_cases:
+                            violation_to_cases[violation] = []
+                        violation_to_cases[violation].append(case)
+    return violation_to_cases
+
+
+
 def run_full_extraction_pipeline(config: Config, process: str, filter_config: FilterConfig = None,
                                  recommender_config: RecommendationConfig = None):
     # General pipeline for constraint extraction, no log-specific recommendation
     nlp_helper = NlpHelper(config)
     resource_handler = get_resource_handler(config, nlp_helper)
     all_constraints = get_or_mine_constraints(config, resource_handler)
+    nlp_helper.pre_compute_embeddings(sentences=get_parts_of_constraints(conf, all_constraints))
     # get_context_sim_computer(config, all_constraints, nlp_helper, resource_handler) # not part of this version
     # Filter constraints (optional)
     const_filter = ConstraintFilter(config, filter_config, resource_handler)
     filtered_constraints = const_filter.filter_constraints(all_constraints)
+    event_log, log_info = get_log_and_info(config, nlp_helper, process)
     # Log-specific constraint recommendation
-    filtered_constraints = compute_relevance_for_log(config, filtered_constraints, nlp_helper,
-                                                     process)
-    recommended_constraints = recommend_constraints_for_log(config, recommender_config, filtered_constraints, nlp_helper,
-                                                            process)
-    consistency_checker = ConsistencyChecker(config)
-    inconsistent_subsets = consistency_checker.check_consistency(recommended_constraints)
-    if len(inconsistent_subsets) > 0:
-        consistent_recommended_constraints = consistency_checker.make_set_consistent_max_relevance(
-            recommended_constraints,
-            inconsistent_subsets)
+    if not exists(config.SRC_ROOT/(CURRENT_LOG_FILE + "-constraints_with_relevance.pkl")):
+        filtered_constraints = compute_relevance_for_log(conf, filtered_constraints, nlp_helper, CURRENT_LOG_FILE,
+                                                          pd_log=event_log, precompute=True)
     else:
-        consistent_recommended_constraints = recommended_constraints
+        filtered_constraints = pd.read_pickle(config.SRC_ROOT/(CURRENT_LOG_FILE + "-constraints_with_relevance.pkl"))
+    recommended_constraints = recommend_constraints_for_log(config, recommender_config, filtered_constraints, nlp_helper,
+                                                            process, pd_log=event_log)
+    # consistency_checker = ConsistencyChecker(config)
+    # inconsistent_subsets = consistency_checker.check_consistency(recommended_constraints)
+    # if len(inconsistent_subsets) > 0: #TODO used an external API, which is not stable in terms of availability
+    #     consistent_recommended_constraints = consistency_checker.make_set_consistent_max_relevance(
+    #         recommended_constraints,
+    #         inconsistent_subsets)
+    # else:
+    consistent_recommended_constraints = recommended_constraints
     # TODO ask user to select correction set, or just recommend subset where least relevant correction set is removed
-    violations = check_constraints(config, process, consistent_recommended_constraints, nlp_helper)
+    consistent_recommended_constraints = consistent_recommended_constraints[
+        #(consistent_recommended_constraints["op_type"] == "Binary")
+        #&
+                                         (~(consistent_recommended_constraints["template"].str.contains("Not")))
+    ]
+    violations = check_constraints(config, process, consistent_recommended_constraints, nlp_helper, pd_log=event_log)
+    violations_to_cases = get_violation_to_cases(violations)
+    violation_df = pd.DataFrame.from_records([{"violation": violation, "cases": cases} for violation, cases in
+                                              violations_to_cases.items()], columns=["violation", "cases"])
+    #filtered_violations = filter_violations(violations)
+
     _logger.info("Done")
 
 
 CURRENT_LOG_WS = "defaultview-2"
-CURRENT_LOG_FILE = "semconsttest.xes"
+CURRENT_LOG_FILE = "BPI_Challenge_2019-3-w-after.xes"
 
 if __name__ == "__main__":
     conf = Config(Path(__file__).parents[2].resolve(), "opal")

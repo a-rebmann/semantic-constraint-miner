@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import warnings
 from typing import List
 
@@ -13,6 +14,8 @@ from mlxtend.frequent_patterns import fpgrowth, apriori
 from itertools import product
 from itertools import combinations
 warnings.filterwarnings("ignore", category=DeprecationWarning)
+
+_logger = logging.getLogger(__name__)
 
 
 class Declare:
@@ -369,7 +372,7 @@ class Declare:
             the number of pendings, activations, violations, fulfilments and the truth value of the trace for that
             constraint.
         """
-        print("Computing checking checking ...")
+        _logger.info("Checking ...")
         if self.log is None:
             raise RuntimeError("You must load the log before checking the model.")
         if self.model is None:
@@ -411,7 +414,6 @@ class Declare:
             the tuples containing id and name of traces that satisfy the constraint. The values of this inner dictionary
             is a CheckerResult object containing the number of pendings, activations, violations, fulfilments.
         """
-        #print("Computing discovery ...")
         if self.log is None:
             raise RuntimeError("You must load a log before.")
         if self.frequent_item_sets is None:
@@ -555,8 +557,6 @@ class Declare:
             dictionary with keys the DECLARE constraints satisfying the assignments. The values are a structured
             representations of these constraints.
         """
-        print("Computing query checking ...")
-
         is_template_given = bool(template_str)
         is_activation_given = bool(activation)
         is_target_given = bool(target)
@@ -669,18 +669,18 @@ class Declare:
                 try:
                     tmp_answer.append(self.query_checking_results[constraint][query])
                 except KeyError:
-                    print(f"{query} is not a valid query. Valid queries are template, activation, target.")
+                    _logger.error(f"{query} is not a valid query. Valid queries are template, activation, target.")
                     sys.exit(1)
             assignments.append(tmp_answer)
         return assignments
 
-    # FUNCTIONS FOR PRINTING RESULTS ##############
+
     def print_conformance_results(self):
         if self.conformance_checking_results is None:
             raise RuntimeError("You must run checking checking before!")
 
         for key, value in self.conformance_checking_results.items():
-            print('Trace ID: ' + str(key[0]) + ' - "' + key[1] + '"')
+            _logger.info('Trace ID: ' + str(key[0]) + ' - "' + key[1] + '"')
             for item in value.items():
-                print('\t' + item[1].state + '\ton ' + item[0])
-            print()
+                _logger.info('\t' + item[1].state + '\ton ' + item[0])
+            _logger.info("\n")

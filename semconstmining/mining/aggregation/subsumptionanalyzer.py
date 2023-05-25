@@ -223,6 +223,7 @@ class SubsumptionAnalyzer:
                             constraint_row_idx, self.config.REDUNDANT] = True  # sets the current constraint as redundant
                         new_const_str = _construct_constraint(constraint, template)
                         row_copy[self.config.CONSTRAINT_STR] = new_const_str
+                        row_copy[self.config.TEMPLATE] = template.templ_str
                         row_copy[self.config.RECORD_ID] = str(uuid.uuid4())
                         return new_constraints.append(row_copy, ignore_index=True)
         return new_constraints

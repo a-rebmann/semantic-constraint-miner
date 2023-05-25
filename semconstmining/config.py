@@ -130,8 +130,8 @@ class Config:
         self.DATA_DATASET_DICT = self.DATA_RAW / self.MODEL_COLLECTION / "dict"
         self.DATA_INTERIM = self.DATA_ROOT / "interim"
         self.DATA_EVAL = self.DATA_ROOT / "eval"
-        self.SRC_ROOT = self.PROJECT_ROOT / "src" / "semconstmining"
-        self.FIGURES_ROOT = self.PROJECT_ROOT / "reports" / "figures"
+        self.SRC_ROOT = self.PROJECT_ROOT / "semantic-constraint-miner"
+
         self.PETRI_LOGS_DIR = self.DATA_INTERIM / "bpmn_logs"
 
         self.MODEL_PATH = self.DATA_ROOT / "bert"
@@ -303,7 +303,7 @@ class Config:
 
         self.CONSTRAINT_TYPES_TO_IGNORE = [Observation.RESOURCE_CONTAINMENT, Template.CHAIN_RESPONSE.templ_str,
                                            Template.CHAIN_PRECEDENCE.templ_str, Template.CHAIN_SUCCESSION.templ_str,
-                                           Template.CHOICE.templ_str]
+                                           Template.CHOICE.templ_str, Template.INIT.templ_str, Template.END.templ_str]
 
         self.CONSTRAINT_TEMPLATES_TO_IGNORE_PER_TYPE = {
             self.ACTIVITY: [],

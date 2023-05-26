@@ -301,7 +301,7 @@ class Config:
             Template.EXCLUSIVE_CHOICE.templ_str: ["yes", "no"]
         }
 
-        self.CONSTRAINT_TYPES_TO_IGNORE = [Observation.RESOURCE_CONTAINMENT, Template.CHAIN_RESPONSE.templ_str,
+        self.CONSTRAINT_TYPES_TO_IGNORE = [Template.CHAIN_RESPONSE.templ_str,
                                            Template.CHAIN_PRECEDENCE.templ_str, Template.CHAIN_SUCCESSION.templ_str,
                                            Template.CHOICE.templ_str, Template.INIT.templ_str, Template.END.templ_str]
 

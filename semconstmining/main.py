@@ -158,8 +158,10 @@ def get_or_mine_constraints(config, resource_handler, min_support=2, dict_filter
 
         store_preprocessed(config, constraints, min_support, dict_filter, mark_redundant, with_nat_lang)
     for to_ignore in config.CONSTRAINT_TYPES_TO_IGNORE:
+        _logger.info("Ignoring constraints of type " + to_ignore)
         constraints = constraints[~(constraints[config.TEMPLATE] == to_ignore)]
     for level, to_ignore in config.CONSTRAINT_TEMPLATES_TO_IGNORE_PER_TYPE.items():
+        _logger.info("Ignoring constraints of type " + str(to_ignore) + " at level " + level)
         constraints = constraints[(constraints[config.LEVEL] != level) |
                                   ((constraints[config.LEVEL] == level) & (
                                       ~constraints[config.TEMPLATE].isin(to_ignore)))]
@@ -334,6 +336,7 @@ def run_full_extraction_pipeline(config: Config, process: str, filter_config: Fi
     if not exists(config.SRC_ROOT/(CURRENT_LOG_FILE + "-constraints_with_relevance.pkl")):
         filtered_constraints = compute_relevance_for_log(conf, filtered_constraints, nlp_helper, CURRENT_LOG_FILE,
                                                           pd_log=event_log, precompute=True)
+        filtered_constraints.to_pickle(config.SRC_ROOT/(CURRENT_LOG_FILE + "-constraints_with_relevance.pkl"))
     else:
         filtered_constraints = pd.read_pickle(config.SRC_ROOT/(CURRENT_LOG_FILE + "-constraints_with_relevance.pkl"))
     recommended_constraints = recommend_constraints_for_log(config, recommender_config, filtered_constraints, nlp_helper,
@@ -348,14 +351,13 @@ def run_full_extraction_pipeline(config: Config, process: str, filter_config: Fi
     consistent_recommended_constraints = recommended_constraints
     # TODO ask user to select correction set, or just recommend subset where least relevant correction set is removed
     consistent_recommended_constraints = consistent_recommended_constraints[
-        #(consistent_recommended_constraints["op_type"] == "Binary")
-        #&
-                                         (~(consistent_recommended_constraints["template"].str.contains("Not")))
+        (consistent_recommended_constraints["constraint_string"].str.contains("Alternate Succession"))
+        &(~(consistent_recommended_constraints["template"].str.contains("Not")))
     ]
     violations = check_constraints(config, process, consistent_recommended_constraints, nlp_helper, pd_log=event_log)
     violations_to_cases = get_violation_to_cases(violations)
-    violation_df = pd.DataFrame.from_records([{"violation": violation, "cases": cases} for violation, cases in
-                                              violations_to_cases.items()], columns=["violation", "cases"])
+    violation_df = pd.DataFrame.from_records([{"violation": violation, "num_violations": len(cases), "cases": cases} for violation, cases in
+                                              violations_to_cases.items()])
     #filtered_violations = filter_violations(violations)
 
     _logger.info("Done")

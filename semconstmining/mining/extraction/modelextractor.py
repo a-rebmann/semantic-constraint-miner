@@ -9,7 +9,6 @@ import logging
 from semconstmining.mining.extraction.declareextractor import _get_constraint_template
 from semconstmining.parsing.label_parser import nlp_helper
 from semconstmining.parsing.conversion.bpmnjsonanalyzer import process_bpmn_shapes
-from semconstmining.mining.model.constraint import Observation
 from semconstmining.parsing.conversion import bpmnjsonanalyzer as bpmn_analyzer
 from semconstmining.declare.enums import Template
 from semconstmining.parsing.resource_handler import ResourceHandler
@@ -185,52 +184,36 @@ class ModelExtractor:
         except Exception as ex:
             _logger.debug(ex)
             return observations
-        if Observation.RESOURCE_TASK_EXISTENCE not in types_to_ignore:
-            for _, lane_info in lanes.items():
-                for shape_id, label in lane_info["labels"].items():
-                    if shape_id in lane_info["tasks"]:
-                        lan_str = nlp_helper.sanitize_label(lane_info["name"])
-                        task_str = nlp_helper.sanitize_label(label)
-                        if lan_str == 'lane' or lan_str in self.config.TERMS_FOR_MISSING or task_str in \
-                                self.config.TERMS_FOR_MISSING:
-                            continue
-                        observation = (task_str, lan_str,
-                                       _create_mp_declare_const_with_role_condition(task_str, lan_str),
-                                       self.config.RESOURCE, self.config.UNARY,
-                                       lan_str)
-                        observations.append(observation)
-                        self.resource_handler.components.add_resource(model_id, lan_str)
-                        self.resource_handler.components.add_task_to_resource(model_id, task_str, lan_str)
-            for _, pool_info in pools.items():
-                for shape_id, label in pool_info["labels"].items():
-                    if shape_id in pool_info["tasks"]:
-                        pool_str = nlp_helper.sanitize_label(pool_info["name"])
-                        task_str = nlp_helper.sanitize_label(label)
-                        if pool_str == 'pool' or pool_str in self.config.TERMS_FOR_MISSING or task_str in \
-                                self.config.TERMS_FOR_MISSING:
-                            continue
-                        observation = (task_str, pool_str,
-                                       _create_mp_declare_const_with_role_condition(task_str, pool_str),
-                                       self.config.RESOURCE,
-                                       self.config.UNARY,
-                                       pool_str)
-                        observations.append(observation)
-                        self.resource_handler.components.add_task_to_resource(model_id, task_str, pool_str)
-
-        # DEPRECATED: TODO find proper way to represent this in DECLARE or SiGNAL
-        if Observation.RESOURCE_CONTAINMENT not in types_to_ignore:
-            for pool_id, pool_info in pools.items():
-                for shape_id, label in pool_info["labels"].items():
-                    if shape_id in lanes:
-                        pool_str = nlp_helper.sanitize_label(pool_info["name"])
-                        task_str = nlp_helper.sanitize_label(label)
-                        if pool_str == 'pool' or pool_str in self.config.TERMS_FOR_MISSING or task_str in \
-                                self.config.TERMS_FOR_MISSING:
-                            continue
-                        observation = (pool_str, task_str,
-                                       Observation.RESOURCE_CONTAINMENT, self.config.RESOURCE, self.config.BINARY, "")
-                        observations.append(observation)
-
+        for _, lane_info in lanes.items():
+            for shape_id, label in lane_info["labels"].items():
+                if shape_id in lane_info["tasks"]:
+                    lan_str = nlp_helper.sanitize_label(lane_info["name"])
+                    task_str = nlp_helper.sanitize_label(label)
+                    if lan_str == 'lane' or lan_str in self.config.TERMS_FOR_MISSING or task_str in \
+                            self.config.TERMS_FOR_MISSING:
+                        continue
+                    observation = (task_str, lan_str,
+                                   _create_mp_declare_const_with_role_condition(task_str, lan_str),
+                                   self.config.RESOURCE, self.config.UNARY,
+                                   lan_str)
+                    observations.append(observation)
+                    self.resource_handler.components.add_resource(model_id, lan_str)
+                    self.resource_handler.components.add_task_to_resource(model_id, task_str, lan_str)
+        for _, pool_info in pools.items():
+            for shape_id, label in pool_info["labels"].items():
+                if shape_id in pool_info["tasks"]:
+                    pool_str = nlp_helper.sanitize_label(pool_info["name"])
+                    task_str = nlp_helper.sanitize_label(label)
+                    if pool_str == 'pool' or pool_str in self.config.TERMS_FOR_MISSING or task_str in \
+                            self.config.TERMS_FOR_MISSING:
+                        continue
+                    observation = (task_str, pool_str,
+                                   _create_mp_declare_const_with_role_condition(task_str, pool_str),
+                                   self.config.RESOURCE,
+                                   self.config.UNARY,
+                                   pool_str)
+                    observations.append(observation)
+                    self.resource_handler.components.add_task_to_resource(model_id, task_str, pool_str)
         return observations
 
     def get_observations_flat(self, observations) -> List[Dict[str, str]]:

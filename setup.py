@@ -22,7 +22,7 @@ setup(
         'psutil',
         'transformers==4.10.3',
         'pytorch-transformers==1.2.0',
-        'torch==1.10.0',
+        'torch==1.13.1',
         'six==1.16.0',
         'tqdm==4.64.1',
         'joblib==1.2.0',

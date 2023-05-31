@@ -225,7 +225,7 @@ class SubsumptionAnalyzer:
                         row_copy[self.config.CONSTRAINT_STR] = new_const_str
                         row_copy[self.config.TEMPLATE] = template.templ_str
                         row_copy[self.config.RECORD_ID] = str(uuid.uuid4())
-                        return new_constraints.append(row_copy, ignore_index=True)
+                        return pd.concat([new_constraints, pd.DataFrame([row_copy])], ignore_index=True)
         return new_constraints
 
     # def _check_and_add(self, constraint_row_idx, constraint_row, constraint, other_const_str, new_constraints,

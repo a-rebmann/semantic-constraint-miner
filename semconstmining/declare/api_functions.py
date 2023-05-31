@@ -82,38 +82,41 @@ def check_trace_conformance(trace, model, consider_vacuity):
                                                                     constraint['activities'][1], rules)
             elif constraint['template'] is Template.SUCCESSION:
                 trace_results_response = mp_response(trace, True, constraint['activities'][0],
-                                                        constraint['activities'][1], rules)
+                                                     constraint['activities'][1], rules)
                 trace_results_precedence = mp_precedence(trace, True, constraint['activities'][0],
-                                                        constraint['activities'][1], rules)
+                                                         constraint['activities'][1], rules)
                 res = CheckerResult(num_fulfillments=trace_results_response.num_fulfillments,
                                     num_violations=trace_results_response.num_violations,
                                     num_pendings=None, num_activations=trace_results_response.num_activations,
-                                    state=trace_results_response.state == TraceState.VIOLATED or \
-                                                trace_results_precedence.state == TraceState.VIOLATED)
+                                    state=TraceState.VIOLATED if trace_results_response.state == TraceState.VIOLATED or \
+                                                                 trace_results_precedence.state == TraceState.VIOLATED else
+                                    TraceState.SATISFIED)
                 trace_results[constraint_str] = res
 
             elif constraint['template'] is Template.ALTERNATE_SUCCESSION:
                 trace_results_response = mp_alternate_response(trace, True, constraint['activities'][0],
-                                                        constraint['activities'][1], rules)
+                                                               constraint['activities'][1], rules)
                 trace_results_precedence = mp_alternate_precedence(trace, True, constraint['activities'][0],
-                                                        constraint['activities'][1], rules)
+                                                                   constraint['activities'][1], rules)
                 res = CheckerResult(num_fulfillments=trace_results_response.num_fulfillments,
                                     num_violations=trace_results_response.num_violations,
                                     num_pendings=None, num_activations=trace_results_response.num_activations,
-                                    state=trace_results_response.state == TraceState.VIOLATED or \
-                                                trace_results_precedence.state == TraceState.VIOLATED)
+                                    state=TraceState.VIOLATED if trace_results_response.state == TraceState.VIOLATED or \
+                                                                 trace_results_precedence.state == TraceState.VIOLATED else
+                                    TraceState.SATISFIED)
                 trace_results[constraint_str] = res
 
             elif constraint['template'] is Template.CHAIN_SUCCESSION:
                 trace_results_response = mp_chain_response(trace, True, constraint['activities'][0],
-                                                        constraint['activities'][1], rules)
+                                                           constraint['activities'][1], rules)
                 trace_results_precedence = mp_chain_precedence(trace, True, constraint['activities'][0],
-                                                        constraint['activities'][1], rules)
+                                                               constraint['activities'][1], rules)
                 res = CheckerResult(num_fulfillments=trace_results_response.num_fulfillments,
                                     num_violations=trace_results_response.num_violations,
                                     num_pendings=None, num_activations=trace_results_response.num_activations,
-                                    state=trace_results_response.state == TraceState.VIOLATED or \
-                                                trace_results_precedence.state == TraceState.VIOLATED)
+                                    state=TraceState.VIOLATED if trace_results_response.state == TraceState.VIOLATED or \
+                                                                 trace_results_precedence.state == TraceState.VIOLATED else
+                                    TraceState.SATISFIED)
                 trace_results[constraint_str] = res
 
             elif constraint['template'] is Template.NOT_RESPONDED_EXISTENCE:

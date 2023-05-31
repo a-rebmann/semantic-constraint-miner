@@ -351,8 +351,8 @@ def run_full_extraction_pipeline(config: Config, process: str, filter_config: Fi
     consistent_recommended_constraints = recommended_constraints
     # TODO ask user to select correction set, or just recommend subset where least relevant correction set is removed
     consistent_recommended_constraints = consistent_recommended_constraints[
-        (consistent_recommended_constraints["constraint_string"].str.contains("Alternate Succession"))
-        &(~(consistent_recommended_constraints["template"].str.contains("Not")))
+        #(consistent_recommended_constraints["constraint_string"].str.contains("Alternate Succession"))&
+        (~(consistent_recommended_constraints["template"].str.contains("Not")))
     ]
     violations = check_constraints(config, process, consistent_recommended_constraints, nlp_helper, pd_log=event_log)
     violations_to_cases = get_violation_to_cases(violations)

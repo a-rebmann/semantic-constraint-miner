@@ -139,6 +139,8 @@ class ResourceHandler:
         """
         This method returns the names of the dictionary entries that are actually referenced from model elements.
         """
+        if self.dictionary is None:
+            return []
         if ids is None:
             return list(self.dictionary[self.dictionary[self.config.IS_REFERENCED]][self.config.NAME].unique())
         else:

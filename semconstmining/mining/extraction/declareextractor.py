@@ -170,12 +170,15 @@ class DeclareExtractor:
                 model_name=row_tuple.name)
         )
 
-    def discover_plain_control_flow_constraints(self, row_tuple):
+    def discover_plain_control_flow_constraints(self, row_tuple, no_events=False):
         if row_tuple.log is None:
             return None
+        if no_events:
+            log = self.remove_events(row_tuple.log)
+        else:
+            log = row_tuple.log
         d4py = Declare(self.config)
         res = set()
-        log = row_tuple.log
         for i, trace in enumerate(log):
             trace.attributes["concept:name"] = str(i)
         d4py.log = log
@@ -339,3 +342,15 @@ class DeclareExtractor:
                 rec[self.config.LEFT_OPERAND] = ops[0].strip()
                 rec[self.config.RIGHT_OPERAND] = ops[1].strip()
         return res
+
+    def remove_events(self, log):
+        projection = EventLog()
+        for i, trace in enumerate(log):
+            tmp_trace = Trace()
+            tmp_trace.attributes[self.config.XES_NAME] = str(i)
+            for event in trace:
+                if "Event" not in event[self.config.ELEMENT_CATEGORY]:
+                    tmp_trace.append(event)
+            if len(tmp_trace) > 0:
+                projection.append(tmp_trace)
+        return projection

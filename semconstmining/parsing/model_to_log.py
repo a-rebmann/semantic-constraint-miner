@@ -199,4 +199,5 @@ class Model2LogConverter:
                 event[self.config.ELEMENT_ID] = e_id
                 event[self.config.XES_NAME] = model_elements.loc[e_id, self.config.CLEANED_LABEL]
                 event[self.config.DICTIONARY] = model_elements.loc[e_id, self.config.DICTIONARY]
+                event[self.config.ELEMENT_CATEGORY] = model_elements.loc[e_id, self.config.ELEMENT_CATEGORY]
         return played_out_log

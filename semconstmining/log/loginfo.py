@@ -6,7 +6,11 @@ class LogInfo:
 
     def __init__(self, nlp_helper: NlpHelper, labels: list = None, names: list = None, resources_to_tasks: dict = None):
         self.labels = [] if labels is None else labels
+        self.original_labels = self.labels
         self.labels = [sanitize_label(label) for label in self.labels]
+        self.label_to_original_label = {label: original_label for label, original_label in
+                                        zip(self.labels, self.original_labels)}
+
         self.names = [] if names is None else names
         self.names = [sanitize_label(name) for name in self.names]
         self.nlp_helper = nlp_helper

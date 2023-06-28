@@ -29,7 +29,8 @@ from semconstmining.selection.consistency.consistency import ConsistencyChecker
 from semconstmining.selection.instantiation.constraintfilter import ConstraintFilter
 from semconstmining.selection.instantiation.filter_config import FilterConfig
 from semconstmining.selection.instantiation.recommendation_config import RecommendationConfig
-#mp.set_start_method('spawn')
+
+# mp.set_start_method('spawn')
 
 logging.basicConfig(format='[%(asctime)s] p%(process)s {%(filename)s:%(lineno)d} %(levelname)s - %(message)s',
                     level=logging.INFO)
@@ -127,14 +128,15 @@ def insert_noise(row, noisy_trace_prob, noisy_event_prob, log_size, resource_han
                     else:
                         noise_type = random.randint(0, 2)
                     if noise_type == 0:
-                        _remove_event(trace_cpy)
+                        trace_cpy = _remove_event(trace_cpy)
                     if noise_type == 1:
-                        _insert_event(trace_cpy, classes)
+                        trace_cpy = _insert_event(trace_cpy, classes)
                     if noise_type == 2:
-                        _swap_events(trace_cpy)
+                        trace_cpy = _swap_events(trace_cpy)
                     if noise_type == 3:
-                        _swap_resources(trace_cpy,
-                                        resource_handler.components.task_per_resource_per_model[row[conf.MODEL_ID]])
+                        trace_cpy = _swap_resources(trace_cpy,
+                                                    resource_handler.components.task_per_resource_per_model[
+                                                        row[conf.MODEL_ID]])
                     # flip coin to see if more noise will be inserted
                     insert_more_noise = (random.random() <= noisy_event_prob)
             if len(trace_cpy) > 1:
@@ -249,8 +251,9 @@ def evaluate_single_run(config, config_index, log_id, true_violations_per_type, 
                             fn += 1
                             const_type_fn[const_type] += 1
                         elif violation not in violations_per_type[const_type][obj_type][case]:
-                            redundant = base_const[(base_const[config.CONSTRAINT_STR] == violation) & (config.OBJECT == obj_type)][
-                                    config.REDUNDANT]
+                            redundant = \
+                            base_const[(base_const[config.CONSTRAINT_STR] == violation) & (config.OBJECT == obj_type)][
+                                config.REDUNDANT]
                             if len(redundant) == 0 or redundant.iloc[0] is False:
                                 fn += 1
                                 const_type_fn[const_type] += 1
@@ -274,9 +277,9 @@ def evaluate_single_run(config, config_index, log_id, true_violations_per_type, 
         const_type: const_type_tp[const_type] / (const_type_tp[const_type] + const_type_fn[const_type]) if
         const_type_tp[const_type] + const_type_fn[const_type] > 0 else 0 for const_type in const_type_tp.keys()}
     const_type_f1 = {const_type: 2 * (const_type_precision[const_type] * const_type_recall[const_type]) / (
-                const_type_precision[const_type] + const_type_recall[const_type]) if const_type_precision[const_type] +
-                                                                                     const_type_recall[
-                                                                                         const_type] > 0 else 0 for
+            const_type_precision[const_type] + const_type_recall[const_type]) if const_type_precision[const_type] +
+                                                                                 const_type_recall[
+                                                                                     const_type] > 0 else 0 for
                      const_type in const_type_tp.keys()}
     const_type_support = {const_type: const_type_tp[const_type] + const_type_fn[const_type] for const_type in
                           const_type_tp.keys()}
@@ -301,7 +304,7 @@ def run_batch_of_logs(config, const, base_const, df, config_index, nlp, r_config
                                                 precompute=True)
         recommended_constraints = recommend_constraints_for_log(config, r_config, constraints, nlp, name, noisy_log)
         consistency_checker = ConsistencyChecker(config)
-        inconsistent_subsets = [] # consistency_checker.check_consistency(recommended_constraints)
+        inconsistent_subsets = []  # consistency_checker.check_consistency(recommended_constraints)
         if len(inconsistent_subsets) > 0:
             consistent_recommended_constraints = consistency_checker.make_set_consistent_max_relevance(
                 recommended_constraints,

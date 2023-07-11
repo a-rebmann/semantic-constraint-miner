@@ -57,8 +57,10 @@ conda env create -f environment.yml
 
     ├── data
     │   ├── bert              <- The bert model for tagging the event labels.
+    │   ├── eval              <- Optional, if you want to use the evaluation.py script to run the full evaluation.
     │   ├── logs              <- Event logs you want to use.
-    │   ├── interim           <- Intermediate data that has been transformed.
+    │   ├── interim           <- Intermediate data that has been preprocessed.
+    │   ├── output            <- Folder to save results in.
     │   └── raw               <- The raw dataset should be placed in this folder.
 
 You need to download the [dataset](insert link) and place it into the folder `./data/raw` such that the models are in `./data/raw/sap_sam_2022/models`.

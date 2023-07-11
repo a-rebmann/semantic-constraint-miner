@@ -36,14 +36,14 @@ SAP grants to Recipient a non-exclusive copyright license to the Model Collectio
 ## Setup
 You have the following options to set up the project:
 
-### Anyone except Macs with M1/M2 chip
+### Via pip
 
 ```shell
 pip install .
 ```
 
 
-### Anyone including Macs with M1/M2 chip
+### If you have issues with Macs with M1/M2 chip
 
 We provide a [conda](https://docs.conda.io/projects/conda/en/latest/user-guide/index.html) environment.yml file that can be used to create a new environment and install the required dependencies.
 

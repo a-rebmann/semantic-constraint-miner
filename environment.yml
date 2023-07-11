@@ -14,7 +14,7 @@ dependencies:
   - matplotlib=3.6.2
   - jupyterlab
   # NLP
-  - spacy=3.4.1
+  - spacy=3.5.2
   - wordcloud=1.8.2.2
   - stringcase=1.2.0
   - nltk=3.8.1
@@ -34,6 +34,7 @@ dependencies:
       - python-dotenv==1.0.0
       - gensim==4.3.1,
       - pylogics==0.1.1,
+      - textblob
       - typer==0.4.2
       - typing-extensions==4.5.0,
       - func-timeout==4.3.5

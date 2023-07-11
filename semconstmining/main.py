@@ -402,8 +402,7 @@ def run_full_extraction_pipeline(config: Config, process: str, filter_config: Fi
     _logger.info("Done")
 
 
-CURRENT_LOG_WS = "defaultview-2"
-CURRENT_LOG_FILE = "B"
+CURRENT_LOG_FILE = "BPI_Challenge_2019-3-w-after.xes"
 
 if __name__ == "__main__":
     conf = Config(Path(__file__).parents[2].resolve(), "opal")
@@ -414,5 +413,5 @@ if __name__ == "__main__":
     rec_config = RecommendationConfig(conf, top_k=250)
     run_full_extraction_pipeline(config=conf, process=CURRENT_LOG_FILE,
                                  filter_config=filt_config,
-                                 recommender_config=rec_config, write_results=False)
+                                 recommender_config=rec_config, write_results=True)
     sys.exit(0)

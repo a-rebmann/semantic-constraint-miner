@@ -44,6 +44,7 @@ setup(
         "pylogics==0.1.1",
         "textblob",
         "typer==0.4.2",
-        "typing-extensions==4.5.0"
+        "typing-extensions==4.5.0",
+        "jupyter",
     ]
 )

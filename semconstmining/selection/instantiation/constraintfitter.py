@@ -24,6 +24,7 @@ class ConstraintFitter:
         )
         temp = temp.drop_duplicates(subset=[self.config.CONSTRAINT_STR, self.config.LEVEL,
                                             self.config.MODEL_NAME, self.config.OBJECT])
+        _logger.info(f"Number of fitted constraints: {len(temp)}")
         return temp
 
     def fit_constraint(self, row, sim_threshold):

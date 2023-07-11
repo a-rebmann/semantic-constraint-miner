@@ -1,9 +1,8 @@
 import logging
-import multiprocessing
 import os
 import random
 import time
-from copy import deepcopy, copy
+from copy import deepcopy
 from os.path import exists
 from pathlib import Path
 
@@ -14,23 +13,25 @@ import pm4py
 from tqdm import tqdm
 
 from semconstmining.config import Config
-from sklearn.model_selection import KFold
+from sklearn.model_selection import KFold, train_test_split
 
 from semconstmining.declare.enums import Template
-import torch.multiprocessing as mp
-from semconstmining.main import get_resource_handler, get_or_mine_constraints, get_context_sim_computer, \
-    compute_relevance_for_log, recommend_constraints_for_log, check_constraints, get_parts_of_constraints
+from semconstmining.log.loghandler import LogHandler
+from semconstmining.log.loginfo import LogInfo
+from semconstmining.main import get_resource_handler, get_or_mine_constraints, \
+    compute_relevance_for_log, check_constraints, get_parts_of_constraints
 from semconstmining.mining.aggregation.subsumptionanalyzer import SubsumptionAnalyzer
 from semconstmining.mining.extraction.extractionhandler import ExtractionHandler
 from semconstmining.mining.extraction.modelextractor import ModelExtractor
 from semconstmining.parsing.label_parser.nlp_helper import NlpHelper
-from semconstmining.parsing.parser import BpmnModelParser
 from semconstmining.selection.consistency.consistency import ConsistencyChecker
 from semconstmining.selection.instantiation.constraintfilter import ConstraintFilter
+from semconstmining.selection.instantiation.constraintfitter import ConstraintFitter
+from semconstmining.selection.instantiation.constraintrecommender import ConstraintRecommender
 from semconstmining.selection.instantiation.filter_config import FilterConfig
 from semconstmining.selection.instantiation.recommendation_config import RecommendationConfig
-
-# mp.set_start_method('spawn')
+from semconstmining.declare.parsers.decl_parser import parse_single_constraint
+from sklearn.metrics import precision_score, recall_score
 
 logging.basicConfig(format='[%(asctime)s] p%(process)s {%(filename)s:%(lineno)d} %(levelname)s - %(message)s',
                     level=logging.INFO)
@@ -47,16 +48,22 @@ def _get_event_classes(log):
 
 
 def _remove_event(trace: Trace):
+    if len(trace) <= 1:
+        return trace
     del_index = random.randint(0, len(trace) - 1)
     trace2 = Trace()
     for i in range(0, len(trace)):
         if i != del_index:
             trace2.append(trace[i])
     trace2.attributes[conf.VIOLATION_TYPE] = 0
+    for att in trace.attributes:
+        trace2.attributes[att] = trace.attributes[att]
     return trace2
 
 
 def _insert_event(trace: Trace, tasks):
+    if len(trace) <= 1:
+        return trace
     ins_index = random.randint(0, len(trace))
     task = random.choice(list(tasks))
     e = Event()
@@ -68,7 +75,7 @@ def _insert_event(trace: Trace, tasks):
 
 
 def _swap_events(trace: Trace):
-    if len(trace) == 1:
+    if len(trace) <= 1:
         return trace
     indices = list(range(len(trace)))
     index1 = random.choice(indices)
@@ -83,10 +90,14 @@ def _swap_events(trace: Trace):
         else:
             trace2.append(trace[i])
     trace2.attributes[conf.VIOLATION_TYPE] = 2
+    for att in trace.attributes:
+        trace2.attributes[att] = trace.attributes[att]
     return trace2
 
 
 def _swap_resources(trace: Trace, resources: dict):
+    if len(trace) < 1:
+        return trace
     ins_index = random.randint(0, len(trace) - 1)
     resources_to_pick_from = set()
     e = trace[ins_index]
@@ -100,6 +111,8 @@ def _swap_resources(trace: Trace, resources: dict):
     e[conf.XES_ROLE] = resource
     e[conf.VIOLATION_TYPE] = 3
     trace.attributes[conf.VIOLATION_TYPE] = 3
+    for att in trace.attributes:
+        trace.attributes[att] = trace.attributes[att]
     return trace
 
 
@@ -202,17 +215,12 @@ def load_or_generate_logs_from_sap_sam(resource_handler):
     noisy_logs.to_pickle(conf.DATA_EVAL / (conf.MODEL_COLLECTION + "_noisy.pkl"))
     for (dir_path, dir_names, filenames) in os.walk(conf.DATA_EVAL):
         for filename in filenames:
-            if (filename != conf.DATA_EVAL / (conf.MODEL_COLLECTION + "_noisy.pkl")) and "noisy" in filename:
+            if "noisy" in filename and not filename.endswith("noisy.pkl"):
                 os.remove(dir_path + "/" + filename)
     return noisy_logs
 
 
-def get_violation_type(constraint):
-    return 0
-
-
-def evaluate_single_run(config, config_index, log_id, true_violations_per_type, violations_per_type, run_time,
-                        base_const):
+def count_tp_fp_fn_strict(config, true_violations_per_type, violations_per_type, base_const):
     tp = 0
     fp = 0
     fn = 0
@@ -251,31 +259,85 @@ def evaluate_single_run(config, config_index, log_id, true_violations_per_type, 
                             fn += 1
                             const_type_fn[const_type] += 1
                         elif violation not in violations_per_type[const_type][obj_type][case]:
-                            redundant = \
-                            base_const[(base_const[config.CONSTRAINT_STR] == violation) & (config.OBJECT == obj_type)][
-                                config.REDUNDANT]
-                            if len(redundant) == 0 or redundant.iloc[0] is False:
+                            if violation in base_const:
                                 fn += 1
                                 const_type_fn[const_type] += 1
         else:
             for case, case_violations in violations.items():
                 for violation in case_violations:
                     if violation not in violations_per_type[const_type][case]:
-                        redundant = base_const[(base_const[config.CONSTRAINT_STR] == violation)][
-                            config.REDUNDANT]
-                        if len(redundant) == 0 or redundant.iloc[0] is False:
+                        if violation in base_const:
                             fn += 1
                             const_type_fn[const_type] += 1
-    precision = tp / (tp + fp) if tp + fp > 0 else 0
-    recall = tp / (tp + fn) if tp + fn > 0 else 0
+    return tp, fp, fn, const_type_tp, const_type_fp, const_type_fn
+
+
+def count_tp_fp_fn(config, y_true, y_pred):
+    tp = 0
+    fp = 0
+    fn = 0
+    const_type_tp = {config.ACTIVITY: 0, config.RESOURCE: 0, config.OBJECT: 0, config.MULTI_OBJECT: 0}
+    const_type_fp = {config.ACTIVITY: 0, config.RESOURCE: 0, config.OBJECT: 0, config.MULTI_OBJECT: 0}
+    const_type_fn = {config.ACTIVITY: 0, config.RESOURCE: 0, config.OBJECT: 0, config.MULTI_OBJECT: 0}
+    for const_type, violations in y_pred.items():
+        if const_type == config.OBJECT:
+            for obj_type, obj_violations in violations.items():
+                for case, case_violations in obj_violations.items():
+                    for violation, consts in case_violations.items():
+                        if obj_type not in y_true[const_type]:
+                            fp += 1
+                            const_type_fp[const_type] += 1
+                        elif violation not in y_true[const_type][obj_type][case]:
+                            fp += 1
+                            const_type_fp[const_type] += 1
+                        else:
+                            tp += 1
+                            const_type_tp[const_type] += 1
+        else:
+            for case, case_violations in violations.items():
+                for violation, consts in case_violations.items():
+                    if violation not in y_true[const_type][case]:
+                        fp += 1
+                        const_type_fp[const_type] += 1
+                    else:
+                        tp += 1
+                        const_type_tp[const_type] += 1
+    for const_type, violations in y_true.items():
+        if const_type == config.OBJECT:
+            for obj_type, obj_violations in violations.items():
+                for case, case_violations in obj_violations.items():
+                    for violation, consts in case_violations.items():
+                        if obj_type not in y_pred[const_type]:
+                            fn += 1
+                            const_type_fn[const_type] += 1
+                        elif violation not in y_pred[const_type][obj_type][case]:
+                            fn += 1
+                            const_type_fn[const_type] += 1
+        else:
+            for case, case_violations in violations.items():
+                for violation, consts in case_violations.items():
+                    if violation not in y_pred[const_type][case]:
+                        fn += 1
+                        const_type_fn[const_type] += 1
+    return tp, fp, fn, const_type_tp, const_type_fp, const_type_fn
+
+
+
+
+def evaluate_single_run(config, config_index, log_id, true_violations_per_type, violations_per_type, run_time,
+                        base_const, y_true, y_pred):
+    #tp, fp, fn, const_type_tp, const_type_fp, const_type_fn = count_tp_fp_fn_strict(config, true_violations_per_type, violations_per_type, base_const)
+    tp, fp, fn, const_type_tp, const_type_fp, const_type_fn = count_tp_fp_fn(config, y_true, y_pred)
+    precision = tp / (tp + fp) if tp + fp > 0 else 1.0
+    recall = tp / (tp + fn) if tp + fn > 0 else 1.0
     f1 = 2 * (precision * recall) / (precision + recall) if precision + recall > 0 else 0
     support = tp + fn
     const_type_precision = {
         const_type: const_type_tp[const_type] / (const_type_tp[const_type] + const_type_fp[const_type]) if
-        const_type_tp[const_type] + const_type_fp[const_type] > 0 else 0 for const_type in const_type_tp.keys()}
+        const_type_tp[const_type] + const_type_fp[const_type] > 0 else 1.0 for const_type in const_type_tp.keys()}
     const_type_recall = {
         const_type: const_type_tp[const_type] / (const_type_tp[const_type] + const_type_fn[const_type]) if
-        const_type_tp[const_type] + const_type_fn[const_type] > 0 else 0 for const_type in const_type_tp.keys()}
+        const_type_tp[const_type] + const_type_fn[const_type] > 0 else 1.0 for const_type in const_type_tp.keys()}
     const_type_f1 = {const_type: 2 * (const_type_precision[const_type] * const_type_recall[const_type]) / (
             const_type_precision[const_type] + const_type_recall[const_type]) if const_type_precision[const_type] +
                                                                                  const_type_recall[
@@ -284,73 +346,216 @@ def evaluate_single_run(config, config_index, log_id, true_violations_per_type, 
     const_type_support = {const_type: const_type_tp[const_type] + const_type_fn[const_type] for const_type in
                           const_type_tp.keys()}
     print(f"Precision: {precision}, Recall: {recall}, F1: {f1}")
-    res = {"config": config_index, "log_id": log_id, "tp": tp, "fp": fp, "fn": fn, "precision": precision,
-           "recall": recall, "f1": f1, "support": support, "run_time": run_time}
+    config_name = str(eval_configurations[config_index][0].relevance_thresh) + "-" + str(
+        eval_configurations[config_index][0].semantic_weight
+    ) + "-" + str(eval_configurations[config_index][0].top_k)
+    res = {"config": config_name, "log_id": log_id, "tp": tp, "fp": fp, "fn": fn, "precision": precision,
+           "recall": recall,
+           #"f1": f1,
+           "support": support, "run_time": run_time}
     for const_type in const_type_tp.keys():
         res[f"{const_type}_precision"] = const_type_precision[const_type]
         res[f"{const_type}_recall"] = const_type_recall[const_type]
-        res[f"{const_type}_f1"] = const_type_f1[const_type]
+        # res[f"{const_type}_f1"] = const_type_f1[const_type]
         res[f"{const_type}_support"] = const_type_support[const_type]
+        res[f"{const_type}_tp"] = const_type_tp[const_type]
+        res[f"{const_type}_fp"] = const_type_fp[const_type]
+        res[f"{const_type}_fn"] = const_type_fn[const_type]
     return res
 
 
-def run_batch_of_logs(config, const, base_const, df, config_index, nlp, r_config):
+def group_violations_by_params(config, violations_per_type):
+    grouped_violations = {}
+    for const_type, violations in violations_per_type.items():
+        grouped_violations[const_type] = {}
+        if const_type == config.OBJECT:
+            for obj_type, obj_violations in violations.items():
+                if obj_type not in grouped_violations[const_type]:
+                    grouped_violations[const_type][obj_type] = {}
+                for case, case_violations in obj_violations.items():
+                    if case not in grouped_violations[const_type][obj_type]:
+                        grouped_violations[const_type][obj_type][case] = {}
+                    for violation in case_violations:
+                        const = parse_single_constraint(violation)
+                        if const["template"].is_binary:
+                            left = const["activities"][0]
+                            right = const["activities"][1]
+                            if left in grouped_violations[const_type][obj_type][case]:
+                                grouped_violations[const_type][obj_type][case][left].append(violation)
+                            else:
+                                grouped_violations[const_type][obj_type][case][left] = [violation]
+                            if right in grouped_violations[const_type][obj_type][case]:
+                                grouped_violations[const_type][obj_type][case][right].append(violation)
+                            else:
+                                grouped_violations[const_type][obj_type][case][right] = [violation]
+                        else:
+                            left = const["activities"][0]
+                            if left in grouped_violations[const_type][obj_type][case]:
+                                grouped_violations[const_type][obj_type][case][left].append(violation)
+                            else:
+                                grouped_violations[const_type][obj_type][case][left] = [violation]
+
+        else:
+            for case, case_violations in violations.items():
+                if case not in grouped_violations[const_type]:
+                    grouped_violations[const_type][case] = {}
+                for violation in case_violations:
+                    const = parse_single_constraint(violation)
+                    if const["template"].is_binary:
+                        left = const["activities"][0]
+                        right = const["activities"][1]
+                        if left in grouped_violations[const_type][case]:
+                            grouped_violations[const_type][case][left].append(violation)
+                        else:
+                            grouped_violations[const_type][case][left] = [violation]
+                        if right in grouped_violations[const_type][case]:
+                            grouped_violations[const_type][case][right].append(violation)
+                        else:
+                            grouped_violations[const_type][case][right] = [violation]
+                    else:
+                        left = const["activities"][0]
+                        if left in grouped_violations[const_type][case]:
+                            grouped_violations[const_type][case][left].append(violation)
+                        else:
+                            grouped_violations[const_type][case][left] = [violation]
+    return grouped_violations
+
+
+def run_eval_for_logs(config, train_constraints, base_const, df, nlp, resource_handler):
     eval_results = []
+    num_tested = 0
     for idx, log_row in df.iterrows():
         name = log_row[config.NAME]
         noisy_log = pm4py.convert_to_dataframe(log_row[config.NOISY_LOG])
+        if len(noisy_log) == 0 or len(noisy_log[config.XES_NAME].unique()) < 3:
+            _logger.warning(f"Empty log {name}")
+            continue
         start = time.time()
-        constraints = compute_relevance_for_log(config, const, nlp, name, noisy_log,
-                                                precompute=True)
-        recommended_constraints = recommend_constraints_for_log(config, r_config, constraints, nlp, name, noisy_log)
-        consistency_checker = ConsistencyChecker(config)
-        inconsistent_subsets = []  # consistency_checker.check_consistency(recommended_constraints)
-        if len(inconsistent_subsets) > 0:
-            consistent_recommended_constraints = consistency_checker.make_set_consistent_max_relevance(
-                recommended_constraints,
-                inconsistent_subsets)
-        else:
-            consistent_recommended_constraints = recommended_constraints
-        true_constraints = base_const[base_const[config.MODEL_ID] == log_row[config.MODEL_ID]]
-        violations_per_type = check_constraints(config, log_row[config.NAME], consistent_recommended_constraints, nlp,
-                                                noisy_log)
-        end = time.time()
-        run_time = round(end - start, 2)
-        true_violations_per_type = check_constraints(config, log_row[config.NAME], true_constraints, nlp, noisy_log)
-        eval_result = evaluate_single_run(config, config_index, log_row[config.MODEL_ID], true_violations_per_type,
-                                          violations_per_type, run_time,
-                                          true_constraints[
-                                              true_constraints[config.MODEL_ID] == log_row[config.MODEL_ID]])
-        eval_results.append(eval_result)
+        constraints = compute_relevance_for_log(config, train_constraints, nlp, name, noisy_log,
+                                                precompute=True, store_sims=True, log_id=log_row[config.MODEL_ID],
+                                                k_most_relevant=500)
+        lh = LogHandler(config)
+        lh.log = noisy_log
+        labels = list(noisy_log[config.XES_NAME].unique())
+        log_info = LogInfo(nlp, labels, [name])
+        for config_idx, eval_config in enumerate(eval_configurations):
+            _logger.info(f"Running evaluation for {name} with config {config_idx}")
+            rec_config = eval_config[0]
+            #filt_config = eval_config[1]
+            #const_filter = ConstraintFilter(conf, filt_config, resource_handler)
+            #filtered_constraints = const_filter.filter_constraints(constraints)
+            recommender = ConstraintRecommender(config, rec_config, log_info)
+            recommended_constraints = recommender.recommend(constraints)
+            constraint_fitter = ConstraintFitter(config, name, recommended_constraints)
+            fitted_constraints = constraint_fitter.fit_constraints(rec_config.relevance_thresh)
+            fitted_activated_constraints = recommender.recommend_by_activation(fitted_constraints)
+            fitted_activated_constraints = recommender.recommend_top_k(fitted_activated_constraints)
+            consistency_checker = ConsistencyChecker(config)
+            inconsistent_subsets = consistency_checker.check_consistency(fitted_activated_constraints) #TODO uncomment when consistency checker is ready
+            if len(inconsistent_subsets) > 0:
+                consistent_recommended_constraints = consistency_checker.make_set_consistent_max_relevance(
+                    fitted_activated_constraints,
+                    inconsistent_subsets)
+            else:
+                consistent_recommended_constraints = fitted_activated_constraints
+            true_constraints = base_const[base_const[config.MODEL_ID] == log_row[config.MODEL_ID]]
+            violations_per_type = check_constraints(config, log_row[config.NAME], consistent_recommended_constraints, nlp,
+                                                    noisy_log)
+            _logger.info(f"Finished checking constraints for {name}")
+            end = time.time()
+            run_time = round(end - start, 2)
+            true_violations_per_type = check_constraints(config, log_row[config.NAME], true_constraints, nlp, noisy_log)
+            _logger.info(f"Finished checking true constraints for {name}")
+            # missing, superfluous, order
+            # group violations by parameters
+            y_true = group_violations_by_params(config, true_violations_per_type)
+            y_true_case = {}
+            for const_type, const_type_violations in y_true.items():
+                if const_type == config.RESOURCE:
+                    continue
+                if const_type == config.OBJECT:
+                    for obj_type, obj_type_violations in const_type_violations.items():
+                        for case, case_violations in obj_type_violations.items():
+                            if case not in y_true_case:
+                                y_true_case[case] = False
+                            if len(case_violations) > 0:
+                                y_true_case[case] = True
+                else:
+                    for case, case_violations in const_type_violations.items():
+                        if case not in y_true_case:
+                            y_true_case[case] = False
+                        if len(case_violations) > 0:
+                            y_true_case[case] = True
+            v_true_case_resources = {}
+            for case, case_violations in true_violations_per_type[config.RESOURCE].items():
+                if case not in v_true_case_resources:
+                    v_true_case_resources[case] = False
+                if len(case_violations) > 0:
+                    v_true_case_resources[case] = True
+            y_pred = group_violations_by_params(config, violations_per_type)
+            y_pred_case = {}
+            for const_type, const_type_violations in y_pred.items():
+                if const_type == config.RESOURCE:
+                    continue
+                if const_type == config.OBJECT:
+                    for obj_type, obj_type_violations in const_type_violations.items():
+                        for case, case_violations in obj_type_violations.items():
+                            if case not in y_pred_case:
+                                y_pred_case[case] = False
+                            if len(case_violations) > 0:
+                                y_pred_case[case] = True
+                else:
+                    for case, case_violations in const_type_violations.items():
+                        if case not in y_pred_case:
+                            y_pred_case[case] = False
+                        if len(case_violations) > 0:
+                            y_pred_case[case] = True
+            v_pred_case_resources = {}
+            for case, case_violations in violations_per_type[config.RESOURCE].items():
+                if case not in v_pred_case_resources:
+                    v_pred_case_resources[case] = False
+                if len(case_violations) > 0:
+                    v_pred_case_resources[case] = True
+            _logger.info(f"Finished grouping violations for {name}")
+            eval_result = evaluate_single_run(config, config_idx, log_row[config.MODEL_ID], true_violations_per_type,
+                                              violations_per_type, run_time,
+                                              set(true_constraints[~true_constraints[config.REDUNDANT]][config.CONSTRAINT_STR].values),
+                                              y_true, y_pred)
+            precision = precision_score(list(y_true_case.values()), list(y_pred_case.values()))
+            recall = recall_score(list(y_true_case.values()), list(y_pred_case.values()))
+            precision_resources = precision_score(list(v_true_case_resources.values()), list(v_pred_case_resources.values()))
+            recall_resources = recall_score(list(v_true_case_resources.values()), list(v_pred_case_resources.values()))
+            print(f"Precision case level: {precision}", f"Recall case level: {recall}")
+            print(f"Precision resource case level: {precision_resources}", f"Recall resource case level: {recall_resources}")
+            eval_result["precision_case_level"] = precision
+            eval_result["recall_case_level"] = recall
+            eval_result["precision_resource_case_level"] = precision_resources
+            eval_result["recall_resource_case_level"] = recall_resources
+            eval_result["inconsistent_subsets"] = len(inconsistent_subsets)
+            eval_result["num_recommended_constraints"] = len(recommended_constraints)
+            eval_result["num_fitted_constraints"] = len(fitted_constraints)
+            eval_result["num_consistent_recommended_constraints"] = len(consistent_recommended_constraints)
+            eval_results.append(eval_result)
+        num_tested += 1
+        #if num_tested == 20:
+        #    break
     return eval_results
 
 
-def run_configuration(config_index, constraints, logs, base_const, r_config, nlp, multi_process=False):
-    eval_results = []
-    if multi_process:
-        from concurrent.futures import ProcessPoolExecutor
-        num_processes = multiprocessing.cpu_count() - 10
-        _logger.info("Number of processes: {}".format(num_processes))
-        split_df = np.array_split(logs, num_processes)
-        with ProcessPoolExecutor(max_workers=num_processes) as executor:
-            futures = []
-            for batch in tqdm(split_df):
-                r_config_copy = deepcopy(r_config)
-                const_copy = deepcopy(constraints)
-                base_const_copy = deepcopy(base_const)
-                nlp_helper_copy = deepcopy(nlp)
-                config_copy = deepcopy(conf)
-                futures.append(executor.submit(run_batch_of_logs, config_copy, const_copy, base_const_copy, batch,
-                                               config_index, nlp_helper_copy, r_config_copy))
-            _logger.info("Number of futures: {}".format(len(futures)))
-            for future in tqdm(futures):
-                eval_results.extend(future.result())
-    else:
-        eval_results.extend(run_batch_of_logs(conf, constraints, base_const, logs, config_index, nlp, r_config))
-    return eval_results
+def run_train_test_split(noisy_logs, base_constraints, all_constraints, resource_handler, test_ids, nlp):
+    run_results = []
+    # use all constraint that are not in the test set
+    constraint_ids = base_constraints[~(base_constraints[conf.MODEL_ID].isin(test_ids))].index.unique()
+    train_constraints = all_constraints[all_constraints[conf.RECORD_ID].isin(constraint_ids)]
+    #fold_test_logs = noisy_logs[noisy_logs[conf.MODEL_ID]=="3b110169afda4c1c87e89d7617bb77ef"] TODO
+    fold_test_logs = noisy_logs[noisy_logs[conf.MODEL_ID].isin(test_ids)]
+    config_results = run_eval_for_logs(config=conf, train_constraints=train_constraints, base_const=base_constraints,
+                                       df=fold_test_logs, nlp=nlp, resource_handler=resource_handler)
+    run_results.extend(config_results)
+    return run_results
 
 
-def evaluate():
+def evaluate(run_k_fold=False):
     _logger.info("Loading data")
     nlp_helper = NlpHelper(conf)
     resource_handler = get_resource_handler(conf, nlp_helper)
@@ -371,7 +576,7 @@ def evaluate():
         base_constraints = pd.read_pickle(conf.DATA_EVAL / (conf.MODEL_COLLECTION + "_eval_constraints.pkl"))
     base_constraints = base_constraints[~(base_constraints[conf.TEMPLATE].isin(conf.CONSTRAINT_TYPES_TO_IGNORE))]
     _logger.info("Loading constraints")
-    all_constraints = get_or_mine_constraints(conf, resource_handler)
+    all_constraints = get_or_mine_constraints(conf, resource_handler, min_support=1)
     # _logger.info("Loading generality scores") # Not part of this version
     # all_constraints = get_context_sim_computer(conf, all_constraints, nlp_helper, resource_handler).constraints
     nlp_helper.pre_compute_embeddings(sentences=get_parts_of_constraints(conf, all_constraints))
@@ -384,96 +589,153 @@ def evaluate():
     _logger.info(f"Unique model ids: {len(log_ids)}")
     _logger.info("Starting evaluation")
     kf = KFold(n_splits=5, shuffle=True, random_state=42)
-    average_results_per_config = []
-    for fold, (train_idx, test_idx) in enumerate(kf.split(log_ids)):
-        fold_results = []
-        test_ids = [log_ids[i] for i in test_idx]
-        # use all constraint that are not in the test set
-        constraint_ids = base_constraints[~(base_constraints[conf.MODEL_ID].isin(test_ids))].index.unique()
-        _logger.info(f"Starting fold {fold}")
-        train_constraints = all_constraints[all_constraints[conf.RECORD_ID].isin(constraint_ids)]
-        fold_test_logs = noisy_logs[noisy_logs[conf.MODEL_ID].isin(test_ids)]
-        for config_idx, eval_config in enumerate(eval_configurations):
-            rec_config = eval_config[0]
-            filt_config = eval_config[1]
-            const_filter = ConstraintFilter(conf, filt_config, resource_handler)
-            filtered_constraints = const_filter.filter_constraints(train_constraints)
-            config_results = run_configuration(config_idx, filtered_constraints, fold_test_logs, base_constraints,
-                                               rec_config, nlp_helper,
-                                               multi_process=MULTI_PROCESS)
-            fold_results.extend(config_results)
-        fold_results_df = pd.DataFrame.from_records(fold_results)
-        average_results_per_config.append(fold_results_df.groupby("config").mean())
-        fold_results_df.to_csv(conf.DATA_EVAL / f"fold_{fold}.csv", index=False)
-    average_results_df = pd.concat(average_results_per_config)
-    average_results_df.to_csv(conf.DATA_EVAL / "average.csv", index=False)
+    # average_results_per_config = []
+    if run_k_fold:
+        all_results = []
+        for fold, (train_idx, test_idx) in enumerate(kf.split(log_ids)):
+            _logger.info(f"Starting fold {fold}")
+            test_ids = [log_ids[i] for i in test_idx]
+            fold_results = run_train_test_split(noisy_logs, base_constraints, all_constraints, resource_handler,
+                                                test_ids, nlp_helper)
+            fold_results_df = pd.DataFrame.from_records(fold_results)
+            fold_results_df["fold"] = fold
+            all_results.append(fold_results_df)
+            # average_results_per_config.append(fold_results_df.groupby("config").mean())
+        run_results_df = pd.concat(all_results)
+        run_results_df.to_csv(conf.DATA_EVAL / f"folds_{time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime())}.csv",
+                              index=False)
+    else:
+        train_ids, test_ids = train_test_split(
+            log_ids, test_size=0.3, random_state=42
+        )
+        run_results = run_train_test_split(noisy_logs, base_constraints, all_constraints, resource_handler, test_ids,
+                                           nlp_helper)
+        run_results = [r for r in run_results if r["support"] > 0]
+        run_results_df = pd.DataFrame.from_records(run_results)
+        run_results_df["fold"] = 0
+        run_results_df.to_csv(conf.DATA_EVAL / f"run_{time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime())}.csv",
+                              index=False)
+        # compute the weighted average per configuration
+    const_types = [conf.ACTIVITY, conf.RESOURCE, conf.OBJECT, conf.MULTI_OBJECT]
+    avg_frames = []
+    for config, group in run_results_df.groupby("config"):
+        config_results = {}
+        avg_precision = group.loc[group["support"] > 0, "precision"].mean()
+        avg_recall = group.loc[group["support"] > 0, "recall"].mean()
+        #avg_f1 = group.loc[group["support"] > 0, "f1"].mean()
+        avg_support = group.loc[group["support"] > 0, "support"].mean()
+        total_support = group["support"].sum()
+        avg_run_time = group["run_time"].mean()
+        tp_avg = group["tp"].mean()
+        fp_avg = group["fp"].mean()
+        fn_avg = group["fn"].mean()
+        tp_total = group["tp"].sum()
+        fp_total = group["fp"].sum()
+        fn_total = group["fn"].sum()
+        config_results["config"] = config
+        config_results["avg_precision"] = avg_precision
+        config_results["avg_recall"] = avg_recall
+        # config_results["avg_f1"] = avg_f1
+        config_results["avg_support"] = avg_support
+        config_results["total_support"] = total_support
+        config_results["avg_run_time"] = avg_run_time
+        config_results["tp_avg"] = tp_avg
+        config_results["fp_avg"] = fp_avg
+        config_results["fn_avg"] = fn_avg
+        config_results["tp_total"] = tp_total
+        config_results["fp_total"] = fp_total
+        config_results["fn_total"] = fn_total
+        config_results["precision_case_level"] = group["precision_case_level"].mean()
+        config_results["recall_case_level"] = group["recall_case_level"].mean()
+        config_results["precision_resource_case_level"] = group["precision_resource_case_level"].mean()
+        config_results["recall_resource_case_level"] = group["recall_resource_case_level"].mean()
+        per_const_dict = {}
+        for const_type in const_types:
+            const_type_avg_precision = group.loc[group[f"{const_type}_support"] > 0, f"{const_type}_precision"].mean()
+            const_type_avg_recall = group.loc[group[f"{const_type}_support"] > 0, f"{const_type}_recall"].mean()
+            #const_type_avg_f1 = group.loc[group[f"{const_type}_support"] > 0, f"{const_type}_f1"].mean()
+            const_type_avg_support = group.loc[group[f"{const_type}_support"] > 0, f"{const_type}_support"].mean()
+            const_type_total_support = group[f"{const_type}_support"].sum()
+            const_tp_avg = group[f"{const_type}_tp"].mean()
+            const_fp_avg = group[f"{const_type}_fp"].mean()
+            const_fn_avg = group[f"{const_type}_fn"].mean()
+            const_tp_total = group[f"{const_type}_tp"].sum()
+            const_fp_total = group[f"{const_type}_fp"].sum()
+            const_fn_total = group[f"{const_type}_fn"].sum()
+            micro_precision = group[f"{const_type}_tp"].sum() / (
+                    group[f"{const_type}_tp"].sum() + group[f"{const_type}_fp"].sum()
+            )
+            micro_recall = group[f"{const_type}_tp"].sum() / (
+                    group[f"{const_type}_tp"].sum() + group[f"{const_type}_fn"].sum()
+            )
+            micro_f1 = 2 * (micro_precision * micro_recall) / (micro_precision + micro_recall)
+            per_const_dict |= {
+                f"{const_type}_precision": const_type_avg_precision,
+                f"{const_type}_recall": const_type_avg_recall,
+                #f"{const_type}_f1": const_type_avg_f1,
+                f"{const_type}_support": const_type_avg_support,
+                f"{const_type}_total_support": const_type_total_support,
+                f"{const_type}_tp": const_tp_avg,
+                f"{const_type}_fp": const_fp_avg,
+                f"{const_type}_fn": const_fn_avg,
+                f"{const_type}_total_tp": const_tp_total,
+                f"{const_type}_total_fp": const_fp_total,
+                f"{const_type}_total_fn": const_fn_total,
+                f"{const_type}_micro_precision": micro_precision,
+                f"{const_type}_micro_recall": micro_recall,
+                #f"{const_type}_micro_f1": micro_f1
+            }
+        config_results.update(per_const_dict)
+        avg_frames.append(config_results)
+    avg_results_df = pd.DataFrame.from_records(avg_frames)
+    avg_results_df.to_csv(conf.DATA_EVAL / f"average_{time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime())}.csv",
+                          index=False)
     _logger.info("Finished evaluation")
 
 
-conf = Config(Path(__file__).parents[2].resolve(), "sap_sam_filtered_2500")
+conf = Config(Path(__file__).parents[2].resolve(), "semantic_sap_sam_filtered")
 conf.CONSTRAINT_TYPES_TO_IGNORE.extend(conf.NEGATIVE_TEMPLATES)
-conf.CONSTRAINT_TYPES_TO_IGNORE.extend(Template.INIT.templ_str)
-conf.CONSTRAINT_TYPES_TO_IGNORE.extend(Template.END.templ_str)
+conf.CONSTRAINT_TYPES_TO_IGNORE.remove(Template.NOT_CO_EXISTENCE.templ_str)
+conf.CONSTRAINT_TYPES_TO_IGNORE.append(Template.INIT.templ_str)
+conf.CONSTRAINT_TYPES_TO_IGNORE.append(Template.END.templ_str)
 
 eval_configurations = [
-    (RecommendationConfig(config=conf, frequency_weight=0.5, semantic_weight=0.5, top_k=1000),
-     FilterConfig(config=conf))
+    (RecommendationConfig(config=conf, semantic_weight=0.9, relevance_thresh=0.0, top_k=500),
+     FilterConfig(config=conf)),
+    (RecommendationConfig(config=conf, semantic_weight=0.9, relevance_thresh=0.0, top_k=250),
+     FilterConfig(config=conf)),
+    (RecommendationConfig(config=conf, semantic_weight=0.9, relevance_thresh=0.0, top_k=100),
+     FilterConfig(config=conf)),
+    (RecommendationConfig(config=conf, semantic_weight=0.9, relevance_thresh=0.0, top_k=50),
+     FilterConfig(config=conf)),
+    (RecommendationConfig(config=conf, semantic_weight=0.9, relevance_thresh=0.0, top_k=10),
+     FilterConfig(config=conf)),
+    (RecommendationConfig(config=conf, semantic_weight=0.5, relevance_thresh=0.0, top_k=500),
+     FilterConfig(config=conf)),
+    (RecommendationConfig(config=conf, semantic_weight=0.5, relevance_thresh=0.0, top_k=250),
+     FilterConfig(config=conf)),
+    (RecommendationConfig(config=conf, semantic_weight=0.5, relevance_thresh=0.0, top_k=100),
+     FilterConfig(config=conf)),
+    (RecommendationConfig(config=conf, semantic_weight=0.5, relevance_thresh=0.0, top_k=50),
+     FilterConfig(config=conf)),
+    (RecommendationConfig(config=conf, semantic_weight=0.5, relevance_thresh=0.0, top_k=10),
+     FilterConfig(config=conf)),
+    (RecommendationConfig(config=conf, semantic_weight=0.9, relevance_thresh=0.5, top_k=500),
+     FilterConfig(config=conf)),
+    (RecommendationConfig(config=conf, semantic_weight=0.9, relevance_thresh=0.5, top_k=250),
+     FilterConfig(config=conf)),
+    (RecommendationConfig(config=conf, semantic_weight=0.9, relevance_thresh=0.5, top_k=100),
+     FilterConfig(config=conf)),
+    (RecommendationConfig(config=conf, semantic_weight=0.9, relevance_thresh=0.5, top_k=50),
+     FilterConfig(config=conf)),
+    (RecommendationConfig(config=conf, semantic_weight=0.9, relevance_thresh=0.0, top_k=10),
+     FilterConfig(config=conf)),
 ]
 
 LOG_SIZE = 100
 NOISY_TRACE_PROB = 0.5
 NOISY_EVENT_PROB = 0.5
 
-MULTI_PROCESS = False
-
-
-def prepare_subset():
-    max_models = 2500
-    nlp_helper = NlpHelper(conf)
-    resource_handler = get_resource_handler(conf, nlp_helper)
-    model_ids = random.sample(list(resource_handler.components.all_objects_per_model.keys()), max_models)
-    parser = BpmnModelParser(conf)
-    paths = parser.get_csv_paths()
-    dfs = []
-    for path in paths:
-        df = pd.read_csv(path)
-        dfs.append(df[df["Model ID"].isin(model_ids)])
-    df = pd.concat(dfs)
-    df.to_csv(conf.DATA_EVAL / "sap_sam_filtered_2500.csv", index=False)
-
-
-def prepare_semantic_dataset():
-    max_labels_in_sentence = 3
-    max_models = 2500
-    nlp_helper = NlpHelper(conf)
-    resource_handler = get_resource_handler(conf, nlp_helper)
-    model_sentences = {}
-    for model_id in tqdm(resource_handler.components.all_objects_per_model):
-        # for model_id, group in tqdm(resource_handler.bpmn_model_elements.groupby(conf.MODEL_ID)):
-        # labels = list(group[group[conf.ELEMENT_CATEGORY] == "Task"][conf.CLEANED_LABEL].dropna().unique())
-        labels = resource_handler.components.all_objects_per_model[model_id]
-        labels = [label for i, label in enumerate(labels) if
-                  label not in conf.TERMS_FOR_MISSING and i < max_labels_in_sentence]
-        model_sentences[model_id] = " and ".join(labels)
-    cluster_to_ids = nlp_helper.cluster(model_sentences)
-    _logger.info(f"Number of clusters: {len(cluster_to_ids)}")
-    # pick the same number of ids from each cluster such that the maximum number of ids is max_models
-    ids = []
-    for cluster, cluster_ids in cluster_to_ids.items():
-        end_idx = min(max_models // len(cluster_to_ids), len(cluster_ids) - 1)
-        ids.extend(cluster_ids[:end_idx])
-    _logger.info(f"Number of ids: {len(ids)}")
-    parser = BpmnModelParser(conf)
-    paths = parser.get_csv_paths()
-    dfs = []
-    for path in paths:
-        df = pd.read_csv(path)
-        dfs.append(df[df["Model ID"].isin(ids)])
-    df = pd.concat(dfs)
-    df.to_csv(conf.DATA_EVAL / "semantic_sap_sam_filtered.csv", index=False)
-
 
 if __name__ == '__main__':
-    # prepare_subset()
-    evaluate()
-    # prepare_semantic_dataset()
+    evaluate(run_k_fold=True)

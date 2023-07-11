@@ -48,5 +48,12 @@ class LogHandler:
         res_to_tasks = {}
         if self.config.XES_ROLE in self.log.columns:
             for role, group in self.log.groupby(self.config.XES_ROLE):
+                role = role.replace(" and ", " & ")
                 res_to_tasks[role] = set(group[self.config.XES_NAME].unique())
+            if "unknown" not in res_to_tasks:
+                res_to_tasks["unknown"] = set(self.log[pd.isna(self.log[self.config.XES_ROLE])]
+                                                   [self.config.XES_NAME].unique())
+            else:
+                res_to_tasks["unknown"].update(set(self.log[pd.isna(self.log[self.config.XES_ROLE])]
+                                                   [self.config.XES_NAME].unique()))
         return res_to_tasks

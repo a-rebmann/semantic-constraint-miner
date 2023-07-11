@@ -372,7 +372,7 @@ class Declare:
             the number of pendings, activations, violations, fulfilments and the truth value of the trace for that
             constraint.
         """
-        _logger.info("Checking ...")
+        _logger.debug("Checking ...")
         if self.log is None:
             raise RuntimeError("You must load the log before checking the model.")
         if self.model is None:

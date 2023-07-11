@@ -4,7 +4,8 @@ from semconstmining.parsing.label_parser.nlp_helper import sanitize_label, NlpHe
 
 class LogInfo:
 
-    def __init__(self, nlp_helper: NlpHelper, labels: list = None, names: list = None, resources_to_tasks: dict = None):
+    def __init__(self, nlp_helper: NlpHelper, labels: list = None, names: list = None,
+                 resources_to_tasks: dict = None, log_id=None):
         self.labels = [] if labels is None else labels
         self.original_labels = self.labels
         self.labels = [sanitize_label(label) for label in self.labels]
@@ -24,3 +25,5 @@ class LogInfo:
         self.resources_to_tasks = {} if resources_to_tasks is None else \
             {sanitize_label(res): {sanitize_label(task) for task in tasks}
              for res, tasks in resources_to_tasks.items()}
+        self.log_id = log_id
+

@@ -59,6 +59,8 @@ class ConstraintRecommender:
     def recommend_top_k(self, constraints, k=None):
         if k is None:
             k = self.recommender_config.top_k
+        if len(constraints) == 0:
+            return constraints
         constraints = pd.concat([constraints[(constraints[self.config.OPERATOR_TYPE] == self.config.UNARY) &
                                              (constraints[self.config.LEVEL] == self.config.ACTIVITY)].nlargest(
             k, [self.config.RELEVANCE_SCORE]),
@@ -100,6 +102,8 @@ class ConstraintRecommender:
             elif row[self.config.LEVEL] == self.config.MULTI_OBJECT and row[column] in self.log_info.objects:
                 res.append(1)
             elif row[self.config.LEVEL] == self.config.OBJECT and row[column] in self.log_info.actions:
+                res.append(1)
+            elif row[self.config.LEVEL] == self.config.ACTIVITY and row[column] in self.log_info.labels:
                 res.append(1)
             else:
                 res.append(0)

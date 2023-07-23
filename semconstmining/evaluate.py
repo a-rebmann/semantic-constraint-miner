@@ -1,5 +1,6 @@
 import logging
 import os
+import pickle
 import random
 import time
 from copy import deepcopy
@@ -37,6 +38,44 @@ logging.basicConfig(format='[%(asctime)s] p%(process)s {%(filename)s:%(lineno)d}
                     level=logging.INFO)
 
 _logger = logging.getLogger(__name__)
+
+
+def compute_true_violations_for_baseline():
+    gold_standard_violations = {}
+    _logger.info("Loading data")
+    nlp_helper = NlpHelper(conf)
+    resource_handler = get_resource_handler(conf, nlp_helper)
+    if not exists(conf.DATA_EVAL / (conf.MODEL_COLLECTION + "_eval_constraints.pkl")):
+        base_constraints = ExtractionHandler(conf, resource_handler).get_all_observations()
+        base_constraints[conf.SUPPORT] = 1
+        grouped = base_constraints.groupby(conf.MODEL_ID)
+        dfs = []
+        for group_id, group in tqdm(grouped):
+            subsumption_analyzer = SubsumptionAnalyzer(conf, group)
+            subsumption_analyzer.check_refinement()
+            subsumption_analyzer.check_subsumption()
+            subsumption_analyzer.check_equal()
+            dfs.append(subsumption_analyzer.constraints)
+        base_constraints = pd.concat(dfs)
+        base_constraints.to_pickle(conf.DATA_EVAL / (conf.MODEL_COLLECTION + "_eval_constraints.pkl"))
+    else:
+        base_constraints = pd.read_pickle(conf.DATA_EVAL / (conf.MODEL_COLLECTION + "_eval_constraints.pkl"))
+    base_constraints = base_constraints[~(base_constraints[conf.TEMPLATE].isin(conf.CONSTRAINT_TYPES_TO_IGNORE))]
+    noisy_logs = load_or_generate_logs_from_sap_sam(resource_handler)
+    noisy_logs = noisy_logs[noisy_logs[conf.LOG].apply(lambda x: len(x) > 0)]
+    _logger.info("Loading constraints")
+
+    for idx, log_row in noisy_logs.iterrows():
+        _logger.info(f"Log {idx}")
+        noisy_log = pm4py.convert_to_dataframe(log_row[conf.NOISY_LOG])
+        if len(noisy_log) == 0 or len(noisy_log[conf.XES_NAME].unique()) < 3:
+            _logger.warning(f"Empty log")
+            continue
+        true_constraints = base_constraints[base_constraints[conf.MODEL_ID] == log_row[conf.MODEL_ID]]
+        true_violations_per_type = check_constraints(conf, log_row[conf.NAME], true_constraints, nlp_helper, noisy_log)
+        y_true = group_violations_by_params(conf, true_violations_per_type)
+        gold_standard_violations[log_row[conf.MODEL_ID]] = y_true
+    pickle.dump(gold_standard_violations, open(conf.DATA_EVAL / "gold_standard_violations.pkl", "wb"))
 
 
 def _get_event_classes(log):
@@ -322,11 +361,9 @@ def count_tp_fp_fn(config, y_true, y_pred):
     return tp, fp, fn, const_type_tp, const_type_fp, const_type_fn
 
 
-
-
 def evaluate_single_run(config, config_index, log_id, true_violations_per_type, violations_per_type, run_time,
                         base_const, y_true, y_pred):
-    #tp, fp, fn, const_type_tp, const_type_fp, const_type_fn = count_tp_fp_fn_strict(config, true_violations_per_type, violations_per_type, base_const)
+    # tp, fp, fn, const_type_tp, const_type_fp, const_type_fn = count_tp_fp_fn_strict(config, true_violations_per_type, violations_per_type, base_const)
     tp, fp, fn, const_type_tp, const_type_fp, const_type_fn = count_tp_fp_fn(config, y_true, y_pred)
     precision = tp / (tp + fp) if tp + fp > 0 else 1.0
     recall = tp / (tp + fn) if tp + fn > 0 else 1.0
@@ -351,7 +388,7 @@ def evaluate_single_run(config, config_index, log_id, true_violations_per_type, 
     ) + "-" + str(eval_configurations[config_index][0].top_k)
     res = {"config": config_name, "log_id": log_id, "tp": tp, "fp": fp, "fn": fn, "precision": precision,
            "recall": recall,
-           #"f1": f1,
+           # "f1": f1,
            "support": support, "run_time": run_time}
     for const_type in const_type_tp.keys():
         res[f"{const_type}_precision"] = const_type_precision[const_type]
@@ -441,9 +478,9 @@ def run_eval_for_logs(config, train_constraints, base_const, df, nlp, resource_h
         for config_idx, eval_config in enumerate(eval_configurations):
             _logger.info(f"Running evaluation for {name} with config {config_idx}")
             rec_config = eval_config[0]
-            #filt_config = eval_config[1]
-            #const_filter = ConstraintFilter(conf, filt_config, resource_handler)
-            #filtered_constraints = const_filter.filter_constraints(constraints)
+            # filt_config = eval_config[1]
+            # const_filter = ConstraintFilter(conf, filt_config, resource_handler)
+            # filtered_constraints = const_filter.filter_constraints(constraints)
             recommender = ConstraintRecommender(config, rec_config, log_info)
             recommended_constraints = recommender.recommend(constraints)
             constraint_fitter = ConstraintFitter(config, name, recommended_constraints)
@@ -451,7 +488,8 @@ def run_eval_for_logs(config, train_constraints, base_const, df, nlp, resource_h
             fitted_activated_constraints = recommender.recommend_by_activation(fitted_constraints)
             fitted_activated_constraints = recommender.recommend_top_k(fitted_activated_constraints)
             consistency_checker = ConsistencyChecker(config)
-            inconsistent_subsets = consistency_checker.check_consistency(fitted_activated_constraints) #TODO uncomment when consistency checker is ready
+            inconsistent_subsets = consistency_checker.check_consistency(
+                fitted_activated_constraints)  # TODO uncomment when consistency checker is ready
             if len(inconsistent_subsets) > 0:
                 consistent_recommended_constraints = consistency_checker.make_set_consistent_max_relevance(
                     fitted_activated_constraints,
@@ -459,7 +497,8 @@ def run_eval_for_logs(config, train_constraints, base_const, df, nlp, resource_h
             else:
                 consistent_recommended_constraints = fitted_activated_constraints
             true_constraints = base_const[base_const[config.MODEL_ID] == log_row[config.MODEL_ID]]
-            violations_per_type = check_constraints(config, log_row[config.NAME], consistent_recommended_constraints, nlp,
+            violations_per_type = check_constraints(config, log_row[config.NAME], consistent_recommended_constraints,
+                                                    nlp,
                                                     noisy_log)
             _logger.info(f"Finished checking constraints for {name}")
             end = time.time()
@@ -519,14 +558,17 @@ def run_eval_for_logs(config, train_constraints, base_const, df, nlp, resource_h
             _logger.info(f"Finished grouping violations for {name}")
             eval_result = evaluate_single_run(config, config_idx, log_row[config.MODEL_ID], true_violations_per_type,
                                               violations_per_type, run_time,
-                                              set(true_constraints[~true_constraints[config.REDUNDANT]][config.CONSTRAINT_STR].values),
+                                              set(true_constraints[~true_constraints[config.REDUNDANT]][
+                                                      config.CONSTRAINT_STR].values),
                                               y_true, y_pred)
             precision = precision_score(list(y_true_case.values()), list(y_pred_case.values()))
             recall = recall_score(list(y_true_case.values()), list(y_pred_case.values()))
-            precision_resources = precision_score(list(v_true_case_resources.values()), list(v_pred_case_resources.values()))
+            precision_resources = precision_score(list(v_true_case_resources.values()),
+                                                  list(v_pred_case_resources.values()))
             recall_resources = recall_score(list(v_true_case_resources.values()), list(v_pred_case_resources.values()))
             print(f"Precision case level: {precision}", f"Recall case level: {recall}")
-            print(f"Precision resource case level: {precision_resources}", f"Recall resource case level: {recall_resources}")
+            print(f"Precision resource case level: {precision_resources}",
+                  f"Recall resource case level: {recall_resources}")
             eval_result["precision_case_level"] = precision
             eval_result["recall_case_level"] = recall
             eval_result["precision_resource_case_level"] = precision_resources
@@ -537,7 +579,7 @@ def run_eval_for_logs(config, train_constraints, base_const, df, nlp, resource_h
             eval_result["num_consistent_recommended_constraints"] = len(consistent_recommended_constraints)
             eval_results.append(eval_result)
         num_tested += 1
-        #if num_tested == 20:
+        # if num_tested == 20:
         #    break
     return eval_results
 
@@ -547,7 +589,7 @@ def run_train_test_split(noisy_logs, base_constraints, all_constraints, resource
     # use all constraint that are not in the test set
     constraint_ids = base_constraints[~(base_constraints[conf.MODEL_ID].isin(test_ids))].index.unique()
     train_constraints = all_constraints[all_constraints[conf.RECORD_ID].isin(constraint_ids)]
-    #fold_test_logs = noisy_logs[noisy_logs[conf.MODEL_ID]=="3b110169afda4c1c87e89d7617bb77ef"] TODO
+    # fold_test_logs = noisy_logs[noisy_logs[conf.MODEL_ID]=="3b110169afda4c1c87e89d7617bb77ef"] TODO
     fold_test_logs = noisy_logs[noisy_logs[conf.MODEL_ID].isin(test_ids)]
     config_results = run_eval_for_logs(config=conf, train_constraints=train_constraints, base_const=base_constraints,
                                        df=fold_test_logs, nlp=nlp, resource_handler=resource_handler)
@@ -598,7 +640,9 @@ def evaluate(run_k_fold=False):
             fold_results = run_train_test_split(noisy_logs, base_constraints, all_constraints, resource_handler,
                                                 test_ids, nlp_helper)
             fold_results_df = pd.DataFrame.from_records(fold_results)
-            fold_results_df["fold"] = fold
+            fold_results_df.to_csv(
+                conf.DATA_EVAL / f"fold_{fold}_{time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime())}.csv",
+                index=False)
             all_results.append(fold_results_df)
             # average_results_per_config.append(fold_results_df.groupby("config").mean())
         run_results_df = pd.concat(all_results)
@@ -622,7 +666,7 @@ def evaluate(run_k_fold=False):
         config_results = {}
         avg_precision = group.loc[group["support"] > 0, "precision"].mean()
         avg_recall = group.loc[group["support"] > 0, "recall"].mean()
-        #avg_f1 = group.loc[group["support"] > 0, "f1"].mean()
+        # avg_f1 = group.loc[group["support"] > 0, "f1"].mean()
         avg_support = group.loc[group["support"] > 0, "support"].mean()
         total_support = group["support"].sum()
         avg_run_time = group["run_time"].mean()
@@ -653,7 +697,7 @@ def evaluate(run_k_fold=False):
         for const_type in const_types:
             const_type_avg_precision = group.loc[group[f"{const_type}_support"] > 0, f"{const_type}_precision"].mean()
             const_type_avg_recall = group.loc[group[f"{const_type}_support"] > 0, f"{const_type}_recall"].mean()
-            #const_type_avg_f1 = group.loc[group[f"{const_type}_support"] > 0, f"{const_type}_f1"].mean()
+            # const_type_avg_f1 = group.loc[group[f"{const_type}_support"] > 0, f"{const_type}_f1"].mean()
             const_type_avg_support = group.loc[group[f"{const_type}_support"] > 0, f"{const_type}_support"].mean()
             const_type_total_support = group[f"{const_type}_support"].sum()
             const_tp_avg = group[f"{const_type}_tp"].mean()
@@ -672,7 +716,7 @@ def evaluate(run_k_fold=False):
             per_const_dict |= {
                 f"{const_type}_precision": const_type_avg_precision,
                 f"{const_type}_recall": const_type_avg_recall,
-                #f"{const_type}_f1": const_type_avg_f1,
+                # f"{const_type}_f1": const_type_avg_f1,
                 f"{const_type}_support": const_type_avg_support,
                 f"{const_type}_total_support": const_type_total_support,
                 f"{const_type}_tp": const_tp_avg,
@@ -683,7 +727,7 @@ def evaluate(run_k_fold=False):
                 f"{const_type}_total_fn": const_fn_total,
                 f"{const_type}_micro_precision": micro_precision,
                 f"{const_type}_micro_recall": micro_recall,
-                #f"{const_type}_micro_f1": micro_f1
+                # f"{const_type}_micro_f1": micro_f1
             }
         config_results.update(per_const_dict)
         avg_frames.append(config_results)
@@ -700,35 +744,35 @@ conf.CONSTRAINT_TYPES_TO_IGNORE.append(Template.INIT.templ_str)
 conf.CONSTRAINT_TYPES_TO_IGNORE.append(Template.END.templ_str)
 
 eval_configurations = [
-    (RecommendationConfig(config=conf, semantic_weight=0.9, relevance_thresh=0.0, top_k=500),
-     FilterConfig(config=conf)),
-    (RecommendationConfig(config=conf, semantic_weight=0.9, relevance_thresh=0.0, top_k=250),
-     FilterConfig(config=conf)),
-    (RecommendationConfig(config=conf, semantic_weight=0.9, relevance_thresh=0.0, top_k=100),
-     FilterConfig(config=conf)),
-    (RecommendationConfig(config=conf, semantic_weight=0.9, relevance_thresh=0.0, top_k=50),
-     FilterConfig(config=conf)),
-    (RecommendationConfig(config=conf, semantic_weight=0.9, relevance_thresh=0.0, top_k=10),
-     FilterConfig(config=conf)),
-    (RecommendationConfig(config=conf, semantic_weight=0.5, relevance_thresh=0.0, top_k=500),
-     FilterConfig(config=conf)),
-    (RecommendationConfig(config=conf, semantic_weight=0.5, relevance_thresh=0.0, top_k=250),
-     FilterConfig(config=conf)),
-    (RecommendationConfig(config=conf, semantic_weight=0.5, relevance_thresh=0.0, top_k=100),
-     FilterConfig(config=conf)),
-    (RecommendationConfig(config=conf, semantic_weight=0.5, relevance_thresh=0.0, top_k=50),
-     FilterConfig(config=conf)),
-    (RecommendationConfig(config=conf, semantic_weight=0.5, relevance_thresh=0.0, top_k=10),
-     FilterConfig(config=conf)),
-    (RecommendationConfig(config=conf, semantic_weight=0.9, relevance_thresh=0.5, top_k=500),
-     FilterConfig(config=conf)),
-    (RecommendationConfig(config=conf, semantic_weight=0.9, relevance_thresh=0.5, top_k=250),
-     FilterConfig(config=conf)),
-    (RecommendationConfig(config=conf, semantic_weight=0.9, relevance_thresh=0.5, top_k=100),
-     FilterConfig(config=conf)),
-    (RecommendationConfig(config=conf, semantic_weight=0.9, relevance_thresh=0.5, top_k=50),
-     FilterConfig(config=conf)),
-    (RecommendationConfig(config=conf, semantic_weight=0.9, relevance_thresh=0.0, top_k=10),
+    # (RecommendationConfig(config=conf, semantic_weight=0.9, relevance_thresh=0.0, top_k=500),
+    #  FilterConfig(config=conf)),
+    # (RecommendationConfig(config=conf, semantic_weight=0.9, relevance_thresh=0.0, top_k=250),
+    #  FilterConfig(config=conf)),
+    # (RecommendationConfig(config=conf, semantic_weight=0.9, relevance_thresh=0.0, top_k=100),
+    #  FilterConfig(config=conf)),
+    # (RecommendationConfig(config=conf, semantic_weight=0.9, relevance_thresh=0.0, top_k=50),
+    #  FilterConfig(config=conf)),
+    # (RecommendationConfig(config=conf, semantic_weight=0.9, relevance_thresh=0.0, top_k=10),
+    #  FilterConfig(config=conf)),
+    # (RecommendationConfig(config=conf, semantic_weight=0.5, relevance_thresh=0.0, top_k=500),
+    #  FilterConfig(config=conf)),
+    # (RecommendationConfig(config=conf, semantic_weight=0.5, relevance_thresh=0.0, top_k=250),
+    #  FilterConfig(config=conf)),
+    # (RecommendationConfig(config=conf, semantic_weight=0.5, relevance_thresh=0.0, top_k=100),
+    #  FilterConfig(config=conf)),
+    # (RecommendationConfig(config=conf, semantic_weight=0.5, relevance_thresh=0.0, top_k=50),
+    #  FilterConfig(config=conf)),
+    # (RecommendationConfig(config=conf, semantic_weight=0.5, relevance_thresh=0.0, top_k=10),
+    #  FilterConfig(config=conf)),
+    # (RecommendationConfig(config=conf, semantic_weight=0.9, relevance_thresh=0.5, top_k=500),
+    #  FilterConfig(config=conf)),
+    # (RecommendationConfig(config=conf, semantic_weight=0.9, relevance_thresh=0.5, top_k=250),
+    #  FilterConfig(config=conf)),
+    # (RecommendationConfig(config=conf, semantic_weight=0.9, relevance_thresh=0.5, top_k=100),
+    #  FilterConfig(config=conf)),
+    # (RecommendationConfig(config=conf, semantic_weight=0.9, relevance_thresh=0.5, top_k=50),
+    #  FilterConfig(config=conf)),
+    (RecommendationConfig(config=conf, semantic_weight=0.9, relevance_thresh=0.5, top_k=10),
      FilterConfig(config=conf)),
 ]
 
@@ -736,6 +780,6 @@ LOG_SIZE = 100
 NOISY_TRACE_PROB = 0.5
 NOISY_EVENT_PROB = 0.5
 
-
 if __name__ == '__main__':
     evaluate(run_k_fold=True)
+    #compute_true_violations_for_baseline()

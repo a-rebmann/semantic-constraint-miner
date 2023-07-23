@@ -353,9 +353,13 @@ def get_violation_to_cases(violations):
 def run_full_extraction_pipeline(config: Config, process: str, filter_config: FilterConfig = None,
                                  recommender_config: RecommendationConfig = None, write_results=False):
     # General pipeline for constraint extraction, no log-specific recommendation
+    start_time = time.time()
     nlp_helper = NlpHelper(config)
     resource_handler = get_resource_handler(config, nlp_helper)
-    all_constraints = get_or_mine_constraints(config, resource_handler)
+    all_constraints = get_or_mine_constraints(config, resource_handler, min_support=1)
+    end_stage_1 = time.time()
+    _logger.info("Stage 1 took " + str(end_stage_1 - start_time) + " seconds")
+    start_time_dynamic = time.time()
     nlp_helper.pre_compute_embeddings(sentences=get_parts_of_constraints(conf, all_constraints))
     # get_context_sim_computer(config, all_constraints, nlp_helper, resource_handler) # not part of this version
     # Filter constraints (optional)
@@ -389,11 +393,16 @@ def run_full_extraction_pipeline(config: Config, process: str, filter_config: Fi
         # (consistent_recommended_constraints["constraint_string"].str.contains("Alternate Succession"))&
         (~(consistent_recommended_constraints["template"].str.contains("Not")))
     ]
+    end_time = time.time()
+    _logger.info("Stage 2 took " + str(end_time - start_time_dynamic) + " seconds")
+    start_time_checking = time.time()
     violations = check_constraints(config, process, consistent_recommended_constraints, nlp_helper, pd_log=event_log)
     violations_to_cases = get_violation_to_cases(violations)
     violation_df = pd.DataFrame.from_records(
         [{"violation": violation, "num_violations": len(cases), "cases": cases} for violation, cases in
          violations_to_cases.items()])
+    end_time_checking = time.time()
+    _logger.info("Stage 3 took " + str(end_time_checking - start_time_checking) + " seconds")
     # filtered_violations = filter_violations(violations)
     if write_results:
         violation_df.to_csv(config.DATA_OUTPUT / (CURRENT_LOG_FILE + "-violations.csv"), index=False)
@@ -405,7 +414,7 @@ def run_full_extraction_pipeline(config: Config, process: str, filter_config: Fi
 CURRENT_LOG_FILE = "BPI_Challenge_2019-3-w-after.xes"
 
 if __name__ == "__main__":
-    conf = Config(Path(__file__).parents[2].resolve(), "opal")
+    conf = Config(Path(__file__).parents[2].resolve(), "semantic_sap_sam_filtered")
     if CURRENT_LOG_FILE == "":
         _logger.error("Please specify log file (CURRENT_LOG_FILE) and put it into " + str(conf.DATA_LOGS))
         sys.exit(1)

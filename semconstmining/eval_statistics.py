@@ -31,6 +31,7 @@ def compute_constraint_statistics():
         min_count_per_model.append(constraints[conf.MODEL_ID].value_counts().min())
         max_count_per_model.append(constraints[conf.MODEL_ID].value_counts().max())
     df = pd.DataFrame({
+        "number_of_models": len(base_constraints[conf.MODEL_ID].unique()),
         "type": types,
         "count": counts,
         "avg_count_per_model": avg_count_per_model,
@@ -39,23 +40,31 @@ def compute_constraint_statistics():
     })
     df.to_csv(conf.DATA_EVAL / (conf.MODEL_COLLECTION + "constraint_statistics_per_model.csv"), index=False)
     agg_constraints = get_or_mine_constraints(conf, resource_handler, min_support=1)
+    agg_constraints["unique"] = agg_constraints.apply(lambda x: x[conf.SUPPORT] == 1, axis=1)
     types = []
     counts = []
     avg_support = []
     min_support = []
     max_support = []
+    count_unique = []
+    count_not_unique = []
     for const_type, constraints in agg_constraints.groupby(by=conf.LEVEL):
         types.append(const_type)
         counts.append(len(constraints))
         avg_support.append(constraints[conf.SUPPORT].mean())
         min_support.append(constraints[conf.SUPPORT].min())
         max_support.append(constraints[conf.SUPPORT].max())
+        count_unique.append(len(constraints[constraints["unique"]]))
+        count_not_unique.append(len(constraints[~constraints["unique"]]))
     df = pd.DataFrame({
+        "number_of_models": len(base_constraints[conf.MODEL_ID].unique()),
         "type": types,
         "count": counts,
         "avg_support": avg_support,
         "min_support": min_support,
-        "max_support": max_support
+        "max_support": max_support,
+        "count_unique": count_unique,
+        "count_not_unique": count_not_unique
     })
     df.to_csv(conf.DATA_EVAL / (conf.MODEL_COLLECTION + "constraint_statistics.csv"), index=False)
     # for index, row in agg_constraints.iterrows():

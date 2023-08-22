@@ -481,21 +481,22 @@ def run_eval_for_logs(config, train_constraints, base_const, df, nlp, resource_h
             # filt_config = eval_config[1]
             # const_filter = ConstraintFilter(conf, filt_config, resource_handler)
             # filtered_constraints = const_filter.filter_constraints(constraints)
+            constraint_fitter = ConstraintFitter(config, name, constraints)
+            fitted_constraints = constraint_fitter.fit_constraints()
             recommender = ConstraintRecommender(config, rec_config, log_info)
-            recommended_constraints = recommender.recommend(constraints)
-            constraint_fitter = ConstraintFitter(config, name, recommended_constraints)
-            fitted_constraints = constraint_fitter.fit_constraints(rec_config.relevance_thresh)
-            fitted_activated_constraints = recommender.recommend_by_activation(fitted_constraints)
-            fitted_activated_constraints = recommender.recommend_top_k(fitted_activated_constraints)
+            recommended_constraints = recommender.recommend(fitted_constraints)
+            selected_constraints = recommender.recommend_by_activation(recommended_constraints)
+            selected_constraints = recommender.recommend_top_k(selected_constraints)
             consistency_checker = ConsistencyChecker(config)
+            #fitted_activated_constraints_clean = consistency_checker.check_trivial_consistency(fitted_activated_constraints)
             inconsistent_subsets = consistency_checker.check_consistency(
-                fitted_activated_constraints)  # TODO uncomment when consistency checker is ready
+                selected_constraints)  # TODO uncomment when consistency checker is ready
             if len(inconsistent_subsets) > 0:
                 consistent_recommended_constraints = consistency_checker.make_set_consistent_max_relevance(
-                    fitted_activated_constraints,
+                    selected_constraints,
                     inconsistent_subsets)
             else:
-                consistent_recommended_constraints = fitted_activated_constraints
+                consistent_recommended_constraints = selected_constraints
             true_constraints = base_const[base_const[config.MODEL_ID] == log_row[config.MODEL_ID]]
             violations_per_type = check_constraints(config, log_row[config.NAME], consistent_recommended_constraints,
                                                     nlp,
@@ -744,34 +745,34 @@ conf.CONSTRAINT_TYPES_TO_IGNORE.append(Template.INIT.templ_str)
 conf.CONSTRAINT_TYPES_TO_IGNORE.append(Template.END.templ_str)
 
 eval_configurations = [
-    # (RecommendationConfig(config=conf, semantic_weight=0.9, relevance_thresh=0.0, top_k=500),
-    #  FilterConfig(config=conf)),
-    # (RecommendationConfig(config=conf, semantic_weight=0.9, relevance_thresh=0.0, top_k=250),
-    #  FilterConfig(config=conf)),
-    # (RecommendationConfig(config=conf, semantic_weight=0.9, relevance_thresh=0.0, top_k=100),
-    #  FilterConfig(config=conf)),
-    # (RecommendationConfig(config=conf, semantic_weight=0.9, relevance_thresh=0.0, top_k=50),
-    #  FilterConfig(config=conf)),
-    # (RecommendationConfig(config=conf, semantic_weight=0.9, relevance_thresh=0.0, top_k=10),
-    #  FilterConfig(config=conf)),
-    # (RecommendationConfig(config=conf, semantic_weight=0.5, relevance_thresh=0.0, top_k=500),
-    #  FilterConfig(config=conf)),
-    # (RecommendationConfig(config=conf, semantic_weight=0.5, relevance_thresh=0.0, top_k=250),
-    #  FilterConfig(config=conf)),
-    # (RecommendationConfig(config=conf, semantic_weight=0.5, relevance_thresh=0.0, top_k=100),
-    #  FilterConfig(config=conf)),
-    # (RecommendationConfig(config=conf, semantic_weight=0.5, relevance_thresh=0.0, top_k=50),
-    #  FilterConfig(config=conf)),
-    # (RecommendationConfig(config=conf, semantic_weight=0.5, relevance_thresh=0.0, top_k=10),
-    #  FilterConfig(config=conf)),
-    # (RecommendationConfig(config=conf, semantic_weight=0.9, relevance_thresh=0.5, top_k=500),
-    #  FilterConfig(config=conf)),
-    # (RecommendationConfig(config=conf, semantic_weight=0.9, relevance_thresh=0.5, top_k=250),
-    #  FilterConfig(config=conf)),
-    # (RecommendationConfig(config=conf, semantic_weight=0.9, relevance_thresh=0.5, top_k=100),
-    #  FilterConfig(config=conf)),
-    # (RecommendationConfig(config=conf, semantic_weight=0.9, relevance_thresh=0.5, top_k=50),
-    #  FilterConfig(config=conf)),
+    (RecommendationConfig(config=conf, semantic_weight=0.9, relevance_thresh=0.0, top_k=500),
+     FilterConfig(config=conf)),
+    (RecommendationConfig(config=conf, semantic_weight=0.9, relevance_thresh=0.0, top_k=250),
+     FilterConfig(config=conf)),
+    (RecommendationConfig(config=conf, semantic_weight=0.9, relevance_thresh=0.0, top_k=100),
+     FilterConfig(config=conf)),
+    (RecommendationConfig(config=conf, semantic_weight=0.9, relevance_thresh=0.0, top_k=50),
+     FilterConfig(config=conf)),
+    (RecommendationConfig(config=conf, semantic_weight=0.9, relevance_thresh=0.0, top_k=10),
+     FilterConfig(config=conf)),
+    (RecommendationConfig(config=conf, semantic_weight=0.5, relevance_thresh=0.0, top_k=500),
+     FilterConfig(config=conf)),
+    (RecommendationConfig(config=conf, semantic_weight=0.5, relevance_thresh=0.0, top_k=250),
+     FilterConfig(config=conf)),
+    (RecommendationConfig(config=conf, semantic_weight=0.5, relevance_thresh=0.0, top_k=100),
+     FilterConfig(config=conf)),
+    (RecommendationConfig(config=conf, semantic_weight=0.5, relevance_thresh=0.0, top_k=50),
+     FilterConfig(config=conf)),
+    (RecommendationConfig(config=conf, semantic_weight=0.5, relevance_thresh=0.0, top_k=10),
+     FilterConfig(config=conf)),
+    (RecommendationConfig(config=conf, semantic_weight=0.9, relevance_thresh=0.5, top_k=500),
+     FilterConfig(config=conf)),
+    (RecommendationConfig(config=conf, semantic_weight=0.9, relevance_thresh=0.5, top_k=250),
+     FilterConfig(config=conf)),
+    (RecommendationConfig(config=conf, semantic_weight=0.9, relevance_thresh=0.5, top_k=100),
+     FilterConfig(config=conf)),
+    (RecommendationConfig(config=conf, semantic_weight=0.9, relevance_thresh=0.5, top_k=50),
+     FilterConfig(config=conf)),
     (RecommendationConfig(config=conf, semantic_weight=0.9, relevance_thresh=0.5, top_k=10),
      FilterConfig(config=conf)),
 ]

@@ -117,9 +117,21 @@ class ConstraintRecommender:
         max_support_per_level = constraints.groupby(self.config.LEVEL)[self.config.SUPPORT].max()
         # turn into dict
         max_support_per_level = max_support_per_level.to_dict()
+        constraints[self.config.SEMANTIC_BASED_RELEVANCE] = constraints.apply(lambda row: self.get_sim_score(row),
+                                                                              axis=1)
         relevance_func = self.recommender_config.get_lambda_function(max_support_per_level)
         constraints[self.config.RELEVANCE_SCORE] = constraints.apply(relevance_func, axis=1)
         _logger.info("Computed relevance scores.")
         constraints = constraints[constraints[self.config.RELEVANCE_SCORE] >= self.recommender_config.relevance_thresh]
         _logger.info("Recommended {} constraints".format(len(constraints)))
         return constraints
+
+    def get_sim_score(self, row):
+        if row[self.config.LEVEL] == self.config.OBJECT and row[self.config.OBJECT] in row[self.config.INDIVIDUAL_RELEVANCE_SCORES]:
+            return row[self.config.INDIVIDUAL_RELEVANCE_SCORES][row[self.config.OBJECT]]
+        elif row[self.config.LEFT_OPERAND] in row[self.config.INDIVIDUAL_RELEVANCE_SCORES] and row[self.config.RIGHT_OPERAND] in row[self.config.INDIVIDUAL_RELEVANCE_SCORES]:
+            return (row[self.config.INDIVIDUAL_RELEVANCE_SCORES][row[self.config.LEFT_OPERAND]] + row[self.config.INDIVIDUAL_RELEVANCE_SCORES][row[self.config.RIGHT_OPERAND]])/ 2
+        elif row[self.config.LEFT_OPERAND] in row[self.config.INDIVIDUAL_RELEVANCE_SCORES]:
+            return row[self.config.INDIVIDUAL_RELEVANCE_SCORES][row[self.config.LEFT_OPERAND]]
+        elif row[self.config.RIGHT_OPERAND] in row[self.config.INDIVIDUAL_RELEVANCE_SCORES]:
+            return row[self.config.INDIVIDUAL_RELEVANCE_SCORES][row[self.config.RIGHT_OPERAND]]

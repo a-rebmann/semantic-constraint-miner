@@ -16,4 +16,3 @@ def test_example_extraction():
     all_constraints = get_or_mine_constraints(config, resource_handler, min_support=1)
     get_context_sim_computer(config, all_constraints, nlp_helper, resource_handler)
     print("Done!")
-

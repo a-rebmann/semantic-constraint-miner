@@ -3,6 +3,8 @@ import logging
 
 import requests
 
+from semconstmining.declare.enums import Template
+
 _logger = logging.getLogger(__name__)
 
 
@@ -10,6 +12,32 @@ class ConsistencyChecker:
 
     def __init__(self, config):
         self.config = config
+
+    def check_trivial_consistency(self, constraint_selection):
+        constraint_selection["inconsistent"] = False
+        mask = (constraint_selection[self.config.CONSTRAINT_STR].str.contains("Responded"))
+        relevant_for_check = constraint_selection[~mask]
+        # go over all pairwise combinations of left operands
+        for idx, constraint_row in relevant_for_check.iterrows():
+            if not constraint_row["inconsistent"]:
+                to_mark = constraint_selection[(constraint_selection[self.config.LEVEL] ==
+                                               constraint_row[self.config.LEVEL]) & (
+                                               constraint_selection[self.config.OBJECT] ==
+                                               constraint_row[self.config.OBJECT])
+                                               & (constraint_selection[self.config.TEMPLATE] ==
+                                                constraint_row[self.config.TEMPLATE]) & (
+                                                constraint_selection[self.config.LEFT_OPERAND] ==
+                                                constraint_row[self.config.RIGHT_OPERAND]) & (
+                                                constraint_selection[self.config.RIGHT_OPERAND] ==
+                                                constraint_row[self.config.LEFT_OPERAND]
+                )]
+                for i, row in to_mark.iterrows():
+                    if not row["inconsistent"]:
+                        if row[self.config.SEMANTIC_BASED_RELEVANCE] > constraint_row[self.config.SEMANTIC_BASED_RELEVANCE]:
+                            constraint_selection.loc[i, "inconsistent"] = True
+                        else:
+                            constraint_selection.loc[idx, "inconsistent"] = True
+        return constraint_selection[~constraint_selection["inconsistent"]]
 
     def check_consistency(self, constraint_selection):
         """

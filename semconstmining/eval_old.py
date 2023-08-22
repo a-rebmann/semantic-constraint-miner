@@ -436,7 +436,7 @@ def run_eval_for_log(config, const, base_const, df, config_index, nlp, r_config)
         recommender = ConstraintRecommender(config, r_config, log_info)
         recommended_constraints = recommender.recommend(constraints)
         constraint_fitter = ConstraintFitter(config, name, recommended_constraints)
-        fitted_constraints = constraint_fitter.fit_constraints(r_config.relevance_thresh)
+        fitted_constraints = constraint_fitter.fit_constraints()
         fitted_constraints = recommender.recommend_by_activation(fitted_constraints)
         consistency_checker = ConsistencyChecker(config)
         inconsistent_subsets = consistency_checker.check_consistency(recommended_constraints) #TODO uncomment when consistency checker is ready

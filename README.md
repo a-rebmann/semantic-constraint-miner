@@ -1,4 +1,4 @@
-# Extracting Generic Execution Constraints from Reference Process Models for Semantic Conformance Checking
+# Mining Constraints from Reference Process Models for Detecting Best-Practice Violations in Event Logs
 
 <sub>
 written by <a href="mailto:rebmann@uni-mannheim.de">Adrian Rebmann</a><br />

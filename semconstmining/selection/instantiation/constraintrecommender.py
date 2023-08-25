@@ -56,6 +56,35 @@ class ConstraintRecommender:
             lambda row: self._compute_activation(row), axis=1)
         return constraints[constraints[self.config.ACTIVATION] > 0]
 
+    def recommend_top_k(self, constraints, k=None):
+        if k is None:
+            k = self.recommender_config.top_k
+        if len(constraints) == 0:
+            return constraints
+        constraints = pd.concat([constraints[(constraints[self.config.OPERATOR_TYPE] == self.config.UNARY) &
+                                             (constraints[self.config.LEVEL] == self.config.ACTIVITY)].nlargest(
+            k, [self.config.RELEVANCE_SCORE]),
+            constraints[(constraints[self.config.OPERATOR_TYPE] == self.config.BINARY) &
+                        (constraints[self.config.LEVEL] == self.config.ACTIVITY)].nlargest(
+                k, [self.config.RELEVANCE_SCORE]),
+            constraints[(constraints[self.config.OPERATOR_TYPE] == self.config.UNARY) &
+                        (constraints[self.config.LEVEL] == self.config.OBJECT)].nlargest(
+                k, [self.config.RELEVANCE_SCORE]),
+            constraints[(constraints[self.config.OPERATOR_TYPE] == self.config.BINARY) &
+                        (constraints[self.config.LEVEL] == self.config.OBJECT)].nlargest(
+                k, [self.config.RELEVANCE_SCORE]),
+            constraints[(constraints[self.config.OPERATOR_TYPE] == self.config.UNARY) &
+                        (constraints[self.config.LEVEL] == self.config.MULTI_OBJECT)].nlargest(
+                k, [self.config.RELEVANCE_SCORE]),
+            constraints[(constraints[self.config.OPERATOR_TYPE] == self.config.BINARY) &
+                        (constraints[self.config.LEVEL] == self.config.MULTI_OBJECT)].nlargest(
+                k, [self.config.RELEVANCE_SCORE]),
+            constraints[(constraints[self.config.OPERATOR_TYPE] == self.config.UNARY) &
+                        (constraints[self.config.LEVEL] == self.config.RESOURCE)].nlargest(
+                k, [self.config.RELEVANCE_SCORE])
+        ])
+        return constraints
+
     def _compute_activation(self, row):
         """
         Computes the activation of a constraint.
@@ -74,6 +103,8 @@ class ConstraintRecommender:
                 res.append(1)
             elif row[self.config.LEVEL] == self.config.OBJECT and row[column] in self.log_info.actions:
                 res.append(1)
+            elif row[self.config.LEVEL] == self.config.ACTIVITY and row[column] in self.log_info.labels:
+                res.append(1)
             else:
                 res.append(0)
         return 1 if (len(res) > 0 and any(res)) or (len(res) == 0) else 0
@@ -83,31 +114,24 @@ class ConstraintRecommender:
             return constraints
         constraints = constraints.copy(deep=True)
         constraints[self.config.RELEVANCE_SCORE] = 0.0
-        relevance_func = self.recommender_config.get_lambda_function(constraints)
+        max_support_per_level = constraints.groupby(self.config.LEVEL)[self.config.SUPPORT].max()
+        # turn into dict
+        max_support_per_level = max_support_per_level.to_dict()
+        constraints[self.config.SEMANTIC_BASED_RELEVANCE] = constraints.apply(lambda row: self.get_sim_score(row),
+                                                                              axis=1)
+        relevance_func = self.recommender_config.get_lambda_function(max_support_per_level)
         constraints[self.config.RELEVANCE_SCORE] = constraints.apply(relevance_func, axis=1)
-        constraints = pd.concat([constraints[(constraints[self.config.OPERATOR_TYPE] == self.config.UNARY) &
-                                             (constraints[self.config.LEVEL] == self.config.ACTIVITY)].nlargest(
-                                    self.recommender_config.top_k, [self.config.RELEVANCE_SCORE]),
-                                 constraints[(constraints[self.config.OPERATOR_TYPE] == self.config.BINARY) &
-                                             (constraints[self.config.LEVEL] == self.config.ACTIVITY)].nlargest(
-                                     self.recommender_config.top_k, [self.config.RELEVANCE_SCORE]),
-                                 constraints[(constraints[self.config.OPERATOR_TYPE] == self.config.UNARY) &
-                                             (constraints[self.config.LEVEL] == self.config.OBJECT)].nlargest(
-                                     self.recommender_config.top_k, [self.config.RELEVANCE_SCORE]),
-                                 constraints[(constraints[self.config.OPERATOR_TYPE] == self.config.BINARY) &
-                                             (constraints[self.config.LEVEL] == self.config.OBJECT)].nlargest(
-                                     self.recommender_config.top_k, [self.config.RELEVANCE_SCORE]),
-                                 constraints[(constraints[self.config.OPERATOR_TYPE] == self.config.UNARY) &
-                                             (constraints[self.config.LEVEL] == self.config.MULTI_OBJECT)].nlargest(
-                                     self.recommender_config.top_k, [self.config.RELEVANCE_SCORE]),
-                                 constraints[(constraints[self.config.OPERATOR_TYPE] == self.config.BINARY) &
-                                             (constraints[self.config.LEVEL] == self.config.MULTI_OBJECT)].nlargest(
-                                     self.recommender_config.top_k, [self.config.RELEVANCE_SCORE]),
-                                 constraints[(constraints[self.config.OPERATOR_TYPE] == self.config.UNARY) &
-                                             (constraints[self.config.LEVEL] == self.config.RESOURCE)].nlargest(
-                                     self.recommender_config.top_k, [self.config.RELEVANCE_SCORE])
-                                 ])
+        _logger.info("Computed relevance scores.")
+        constraints = constraints[constraints[self.config.RELEVANCE_SCORE] >= self.recommender_config.relevance_thresh]
+        _logger.info("Recommended {} constraints".format(len(constraints)))
         return constraints
 
-    def non_conflicting_max_relevance(self, constraints, recommender_config: RecommendationConfig):
-        return constraints
+    def get_sim_score(self, row):
+        if row[self.config.LEVEL] == self.config.OBJECT and row[self.config.OBJECT] in row[self.config.INDIVIDUAL_RELEVANCE_SCORES]:
+            return row[self.config.INDIVIDUAL_RELEVANCE_SCORES][row[self.config.OBJECT]]
+        elif row[self.config.LEFT_OPERAND] in row[self.config.INDIVIDUAL_RELEVANCE_SCORES] and row[self.config.RIGHT_OPERAND] in row[self.config.INDIVIDUAL_RELEVANCE_SCORES]:
+            return (row[self.config.INDIVIDUAL_RELEVANCE_SCORES][row[self.config.LEFT_OPERAND]] + row[self.config.INDIVIDUAL_RELEVANCE_SCORES][row[self.config.RIGHT_OPERAND]])/ 2
+        elif row[self.config.LEFT_OPERAND] in row[self.config.INDIVIDUAL_RELEVANCE_SCORES]:
+            return row[self.config.INDIVIDUAL_RELEVANCE_SCORES][row[self.config.LEFT_OPERAND]]
+        elif row[self.config.RIGHT_OPERAND] in row[self.config.INDIVIDUAL_RELEVANCE_SCORES]:
+            return row[self.config.INDIVIDUAL_RELEVANCE_SCORES][row[self.config.RIGHT_OPERAND]]

@@ -15,7 +15,7 @@ from semconstmining.parsing.label_parser.nlp_helper import NlpHelper
 
 def verify_violations(tmp_res, log):
     counts = Counter(const for vals in tmp_res.values() for const in vals)
-    res = {key: {val for val in vals if counts[val] < len(log)} for key, vals in tmp_res.items()}
+    res = {key: {val for val in vals if counts[val] <= 0.9 * len(log)} for key, vals in tmp_res.items()}
     return res
 
 
@@ -33,16 +33,16 @@ class DeclareChecker:
                                                            case_id_key=self.config.XES_CASE)
         self.activities_to_parsed = {activity: self.nlp_helper.parse_label(activity) for activity in self.activities}
 
-    def check_constraints(self):
+    def check_constraints(self, with_aggregates=False, with_id=False):
         res = {
             # First we check the object-level constraints
-            self.config.OBJECT: self.check_object_level_constraints()
+            self.config.OBJECT: self.check_object_level_constraints(with_aggregates=with_aggregates, with_id=with_id)
             # Then we check the multi-object constraints
-            , self.config.MULTI_OBJECT: self.check_multi_object_constraints()
+            , self.config.MULTI_OBJECT: self.check_multi_object_constraints(with_aggregates=with_aggregates, with_id=with_id)
             # Then we check the activity-level constraints
-            , self.config.ACTIVITY: self.check_activity_level_constraints()
+            , self.config.ACTIVITY: self.check_activity_level_constraints(with_aggregates=with_aggregates, with_id=with_id)
             # Then we check the resource constraints
-            , self.config.RESOURCE: self.check_resource_level_constraints()
+            , self.config.RESOURCE: self.check_resource_level_constraints(with_aggregates=with_aggregates, with_id=with_id)
             if self.config.XES_ROLE in self.log.columns else {}
         }
         return res
@@ -52,13 +52,23 @@ class DeclareChecker:
         if len(self.constraints) == 0:
             return constraint_strings
         for idx, row in self.constraints[self.constraints[self.config.LEVEL] == level].iterrows():
-            constraint_strings[row[self.config.CONSTRAINT_STR]] = row[self.config.TEMPLATE]
+            const_str = row[self.config.CONSTRAINT_STR]
+            if level == self.config.RESOURCE and " and " in row[self.config.CONSTRAINT_STR]:
+                if len(row[self.config.CONSTRAINT_STR].split("A.org:role is not ")) > 1:
+                    res = row[self.config.CONSTRAINT_STR].split("A.org:role is not ")[1]
+                    const_str = const_str.replace(res, res.replace(" and ", " & "))
+            if self.config.FITTED_RECORD_ID in self.constraints.columns:
+                constraint_strings[const_str] = row[self.config.TEMPLATE], row[self.config.FITTED_RECORD_ID]
+            else:
+                constraint_strings[const_str] = row[self.config.TEMPLATE], 0
         return constraint_strings
 
-    def check_object_level_constraints(self):
+    def check_object_level_constraints(self, with_aggregates=False, with_id=False):
         filtered_traces = self.get_filtered_traces(self.log, parsed_tasks=self.activities_to_parsed,
                                                    with_loops=self.config.LOOPS)
         res = {}
+        # aggregate results and provide frequencies
+        agg_res = {}
         bos = set([x.main_object for trace in filtered_traces.values() for x in trace if
                    x.main_object not in self.config.TERMS_FOR_MISSING])
         for bo in bos:
@@ -68,9 +78,30 @@ class DeclareChecker:
             d4py.model = parse_decl(constraint_strings.keys())
             tmp_res = d4py.conformance_checking(consider_vacuity=True)
             res[bo] = verify_violations(tmp_res, d4py.log)
+            if with_id:
+                res[bo] = {key: {(val, constraint_strings[val][1]) for val in vals} for key, vals in res[bo].items()}
+                if with_aggregates:
+                    violation_to_frequency = {}
+                    for key, vals in res[bo].items():
+                        for val in vals:
+                            if val[1] not in violation_to_frequency:
+                                violation_to_frequency[val[1]] = 0
+                            violation_to_frequency[val[1]] += 1
+                    agg_res[bo] = violation_to_frequency
+            else:
+                if with_aggregates:
+                    violation_to_frequency = {}
+                    for key, vals in res[bo].items():
+                        for val in vals:
+                            if val not in violation_to_frequency:
+                                violation_to_frequency[val] = 0
+                            violation_to_frequency[val] += 1
+                    agg_res[bo] = violation_to_frequency
+        if with_aggregates:
+            return res, agg_res
         return res
 
-    def check_multi_object_constraints(self):
+    def check_multi_object_constraints(self, with_aggregates=False, with_id=False):
         filtered_traces = self.get_filtered_traces(self.log, parsed_tasks=self.activities_to_parsed,
                                                    with_loops=self.config.LOOPS)
         d4py = Declare(self.config)
@@ -78,9 +109,29 @@ class DeclareChecker:
         constraint_strings = self.get_constraint_strings(level=self.config.MULTI_OBJECT)
         d4py.model = parse_decl(constraint_strings.keys())
         tmp_res = d4py.conformance_checking(consider_vacuity=True)
-        return verify_violations(tmp_res, d4py.log)
+        res = verify_violations(tmp_res, d4py.log)
+        if with_id:
+            res = {key: {(val, constraint_strings[val][1]) for val in vals} for key, vals in res.items()}
+            if with_aggregates:
+                violation_to_frequency = {}
+                for key, vals in res.items():
+                    for val in vals:
+                        if val[1] not in violation_to_frequency:
+                            violation_to_frequency[val[1]] = 0
+                        violation_to_frequency[val[1]] += 1
+                return res, violation_to_frequency
+        else:
+            if with_aggregates:
+                violation_to_frequency = {}
+                for key, vals in res.items():
+                    for val in vals:
+                        if val not in violation_to_frequency:
+                            violation_to_frequency[val] = 0
+                        violation_to_frequency[val] += 1
+                return res, violation_to_frequency
+        return res
 
-    def check_activity_level_constraints(self):
+    def check_activity_level_constraints(self, with_aggregates=False, with_id=False):
         filtered_traces = self.get_filtered_traces(self.log, parsed_tasks=self.activities_to_parsed,
                                                    with_loops=self.config.LOOPS)
         d4py = Declare(self.config)
@@ -88,29 +139,79 @@ class DeclareChecker:
         constraint_strings = self.get_constraint_strings(level=self.config.ACTIVITY)
         d4py.model = parse_decl(constraint_strings.keys())
         tmp_res = d4py.conformance_checking(consider_vacuity=True)
-        return verify_violations(tmp_res, d4py.log)
+        res = verify_violations(tmp_res, d4py.log)
+        if with_id:
+            res = {key: {(val, constraint_strings[val][1]) for val in vals} for key, vals in res.items()}
+            if with_aggregates:
+                violation_to_frequency = {}
+                for key, vals in res.items():
+                    for val in vals:
+                        if val[1] not in violation_to_frequency:
+                            violation_to_frequency[val[1]] = 0
+                        violation_to_frequency[val[1]] += 1
+                return res, violation_to_frequency
+        else:
+            if with_aggregates:
+                violation_to_frequency = {}
+                for key, vals in res.items():
+                    for val in vals:
+                        if val not in violation_to_frequency:
+                            violation_to_frequency[val] = 0
+                        violation_to_frequency[val] += 1
+                return res, violation_to_frequency
+        return res
 
-    def check_resource_level_constraints(self):
+    def check_resource_level_constraints(self, with_aggregates=False, with_id=False):
         filtered_traces = self.get_filtered_traces(self.log, parsed_tasks=self.activities_to_parsed,
-                                                   with_loops=self.config.LOOPS)
+                                                   with_loops=self.config.LOOPS, with_resources=True)
         d4py = Declare(self.config)
         d4py.log = self.clean_log_projection(filtered_traces, with_resources=True)
         constraint_strings = self.get_constraint_strings(level=self.config.RESOURCE)
         d4py.model = parse_decl(constraint_strings.keys())
         tmp_res = d4py.conformance_checking(consider_vacuity=True)
-        return verify_violations(tmp_res, d4py.log)
+        res = verify_violations(tmp_res, d4py.log)
+        if with_id:
+            res = {key: {(val, constraint_strings[val][1]) for val in vals} for key, vals in res.items()}
+            if with_aggregates:
+                violation_to_frequency = {}
+                for key, vals in res.items():
+                    for val in vals:
+                        if val[1] not in violation_to_frequency:
+                            violation_to_frequency[val[1]] = 0
+                        violation_to_frequency[val[1]] += 1
+                return res, violation_to_frequency
+        else:
+            if with_aggregates:
+                violation_to_frequency = {}
+                for key, vals in res.items():
+                    for val in vals:
+                        if val not in violation_to_frequency:
+                            violation_to_frequency[val] = 0
+                        violation_to_frequency[val] += 1
+                return res, violation_to_frequency
+        return res
 
     def has_loop(self, trace):
         return trace[self.config.XES_NAME].nunique() > len(trace)
 
-    def get_filtered_traces(self, log: DataFrame, parsed_tasks=None, with_loops=False):
+    def get_filtered_traces(self, log: DataFrame, parsed_tasks=None, with_loops=False, with_resources=False):
         if parsed_tasks is not None:
-            res = {trace_id: [parsed_tasks[event[self.config.XES_NAME]] if event[
-                                                                         self.config.XES_NAME] in parsed_tasks else get_dummy(
-                           self.config, event[self.config.XES_NAME], self.config.EN)
-                        for event_index, event in
-                        trace.iterrows()] for trace_id, trace in log.groupby(self.config.XES_CASE) if with_loops or not self.has_loop(trace)}
-            return res
+            if with_resources:
+                res = {trace_id: [(parsed_tasks[event[self.config.XES_NAME]], event[self.config.XES_ROLE]) if event[
+                                                                                                                  self.config.XES_NAME] in parsed_tasks else get_dummy(
+                    self.config, event[self.config.XES_NAME], self.config.EN)
+                                  for event_index, event in
+                                  trace.iterrows()] for trace_id, trace in log.groupby(self.config.XES_CASE) if
+                       with_loops or not self.has_loop(trace)}
+                return res
+            else:
+                res = {trace_id: [parsed_tasks[event[self.config.XES_NAME]] if event[
+                                                                                   self.config.XES_NAME] in parsed_tasks else get_dummy(
+                    self.config, event[self.config.XES_NAME], self.config.EN)
+                                  for event_index, event in
+                                  trace.iterrows()] for trace_id, trace in log.groupby(self.config.XES_CASE) if
+                       with_loops or not self.has_loop(trace)}
+                return res
         else:
             res = {trace_id: [event[self.config.XES_NAME] for event_idx, event in trace.iterrows()] for trace_id, trace
                    in
@@ -176,13 +277,18 @@ class DeclareChecker:
         for trace_id, trace in traces.items():
             tmp_trace = Trace()
             tmp_trace.attributes[self.config.XES_NAME] = trace_id
-            for parsed in trace:
-                if parsed.label not in self.config.TERMS_FOR_MISSING:
-                    event = Event({self.config.XES_NAME: parsed.label})
-                    if with_resources:
-                        event[self.config.XES_ROLE] = self.task_to_res[parsed.label]
-                    tmp_trace.append(event)
+            if with_resources:
+                for parsed, res in trace:
+                    if parsed.label not in self.config.TERMS_FOR_MISSING:
+                        event = Event({self.config.XES_NAME: parsed.label})
+                        event[self.config.XES_ROLE] = res.replace(" and ", " & ") if type(
+                            res) == str else "unknown"  # self.task_to_res[parsed.label]
+                        tmp_trace.append(event)
+            else:
+                for parsed in trace:
+                    if parsed.label not in self.config.TERMS_FOR_MISSING:
+                        event = Event({self.config.XES_NAME: parsed.label})
+                        tmp_trace.append(event)
             if len(tmp_trace) > 0:
                 projection.append(tmp_trace)
         return projection
-

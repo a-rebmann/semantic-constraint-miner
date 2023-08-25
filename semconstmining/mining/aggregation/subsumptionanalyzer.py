@@ -194,7 +194,7 @@ class SubsumptionAnalyzer:
                     continue
 
         # merge the new constraints into the existing ones
-        print("New constraints: " + str(len(new_constraints)))
+        # print("New constraints: " + str(len(new_constraints)))
 
         self.constraints = pd.concat([self.constraints.reset_index(), new_constraints]).set_index(["obs_id"])
 

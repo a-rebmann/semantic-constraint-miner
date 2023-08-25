@@ -441,19 +441,12 @@ class NlpHelper:
         # Two parameters to tune:
         # min_cluster_size: Only consider cluster that have at least 25 elements
         # threshold: Consider sentence pairs with a cosine-similarity larger than threshold as similar
-        clusters = util.community_detection(corpus_embeddings, min_community_size=25,
-                                            threshold=0.7)
+        clusters = util.community_detection(corpus_embeddings, min_community_size=50,
+                                            threshold=0.6)
 
         _logger.info("Clustering done after {:.2f} sec".format(time.time() - start_time))
         cluster_to_ids = {}
-        # Print for all clusters the top 3 and bottom 3 elements
         for i, cluster in enumerate(clusters):
-            _logger.info("\nCluster {}, #{} Elements ".format(i + 1, len(cluster)))
-            for sentence_id in cluster[0:3]:
-                _logger.info("\t", sentences[sentence_id])
-            _logger.info("\t", "...")
-            for sentence_id in cluster[-3:]:
-                _logger.info("\t", sentences[sentence_id])
             for sentence_id in cluster:
                 if i not in cluster_to_ids:
                     cluster_to_ids[i] = []

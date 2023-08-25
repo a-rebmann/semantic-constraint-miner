@@ -372,7 +372,7 @@ class Declare:
             the number of pendings, activations, violations, fulfilments and the truth value of the trace for that
             constraint.
         """
-        _logger.info("Checking ...")
+        _logger.debug("Checking ...")
         if self.log is None:
             raise RuntimeError("You must load the log before checking the model.")
         if self.model is None:
@@ -482,6 +482,9 @@ class Declare:
             dictionary containing the results indexed by discovered constraints. The value is a dictionary with keys
             the tuples containing id and name of traces that satisfy the constraint. The values of this inner dictionary
             is a CheckerResult object containing the number of pendings, activations, violations, fulfilments.
+
+        Args:
+            plain:
         """
         if self.log is None:
             raise RuntimeError("You must load a log before.")

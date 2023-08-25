@@ -125,6 +125,7 @@ class Config:
         self.DATA_ROOT = self.PROJECT_ROOT / "data"
         self.DATA_RAW = self.DATA_ROOT / "raw"
         self.DATA_LOGS = self.DATA_ROOT / "logs"
+        self.DATA_OUTPUT = self.DATA_ROOT / "output"
         self.DATA_RESOURCES = self.DATA_ROOT / "resources"
         self.DATA_DATASET = self.DATA_RAW / self.MODEL_COLLECTION / "models"
         self.DATA_DATASET_DICT = self.DATA_RAW / self.MODEL_COLLECTION / "dict"
@@ -307,12 +308,11 @@ class Config:
                                           + self.NEGATIVE_TEMPLATES
 
         self.CONSTRAINT_TEMPLATES_TO_IGNORE_PER_TYPE = {
-            self.ACTIVITY: [],
+            self.ACTIVITY: [Template.EXACTLY.templ_str, Template.EXISTENCE.templ_str, Template.ABSENCE.templ_str],
             self.OBJECT: [],
             self.MULTI_OBJECT: [Template.EXACTLY.templ_str, Template.EXISTENCE.templ_str, Template.ABSENCE.templ_str,
-                                Template.INIT.templ_str, Template.END.templ_str, Template.EXCLUSIVE_CHOICE.templ_str,
-                                Template.CHOICE.templ_str, Template.CHAIN_PRECEDENCE.templ_str,
-                                Template.CHAIN_RESPONSE.templ_str, Template.CHAIN_SUCCESSION.templ_str],
+                                Template.EXCLUSIVE_CHOICE.templ_str
+                                ],
             self.RESOURCE: [],
         }
 

@@ -44,7 +44,7 @@ The folder structure should look like this:
     │   ├── output            <- Folder to save results in.
     │   └── raw               <- The raw dataset should be placed in this folder.
 
-The full dataset can be downloaded from here: [dataset](insert link); place it into the folder `./data/raw` 
+The full process model dataset (a subset of that was used in our experiments) can be downloaded from here: [dataset](https://zenodo.org/record/7012043); place it into the folder `./data/raw` 
 such that the models are in `./data/raw/sap_sam_2022/models`. Note that for the evaluation experiments we created a 
 filtered version of the dataset, which is included in `project_root/eval_data`.
 
@@ -60,7 +60,13 @@ python -m nltk.downloader stopwords
 
 Lastly, we use a custom Tagger to extract objects, actions, and various other semantic information from labels.
 You need to download the four files from [here](https://gitlab.uni-mannheim.de/processanalytics/semantic-event-log-annotation/-/tree/main/.model/main) and put them into <code>data/bert/</code>
-    
+
+## Usage
+1. Place the event logs you want to use in the `data/logs` folder.
+2. Adapt the CURRENT_LOG_FILE variable in `main.py` to the name of the log file you want to use.
+3. Make sure thr name of the model collection you want to use is set in the `MODEL_COLLECTION` variable in `main.py`.
+4. Run the `main.py` script 
+
     
 ## Evaluation
 ### Results from the paper and additional results

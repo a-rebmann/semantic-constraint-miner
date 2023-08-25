@@ -447,9 +447,10 @@ def run_full_extraction_pipeline(config: Config, process: str, filter_config: Fi
 
 
 CURRENT_LOG_FILE = "BPI_Challenge_2019-3-w-after.xes"
+MODEL_COLLECTION = "semantic_sap_sam_filtered"
 
 if __name__ == "__main__":
-    conf = Config(Path(__file__).parents[2].resolve(), "semantic_sap_sam_filtered")
+    conf = Config(Path(__file__).parents[2].resolve(), MODEL_COLLECTION)
     if CURRENT_LOG_FILE == "":
         _logger.error("Please specify log file (CURRENT_LOG_FILE) and put it into " + str(conf.DATA_LOGS))
         sys.exit(1)

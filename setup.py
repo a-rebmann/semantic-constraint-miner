@@ -6,8 +6,8 @@ with open("README.md", "r") as fh:
 setup(
     name="semconstmining",
     packages=find_packages(),
-    author='Adrian Rebmann',
-    author_email='rebmann@uni-mannheim.de',
+    author='Anonymous',
+    author_email='anonymous@anonymous.com',
     version="0.1.25",
     description="long description",
     long_description=long_description,

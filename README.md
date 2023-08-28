@@ -1,9 +1,5 @@
 # Mining Constraints from Reference Process Models for Detecting Best-Practice Violations in Event Logs
 
-<sub>
-written by <a href="mailto:rebmann@uni-mannheim.de">Adrian Rebmann</a><br />
-</sub>
-
 ## About
 This repository contains the implementation, data, evaluation scripts, and results as described in the manuscript
 <i>Mining Constraints from Reference Process Models for Detecting Best-Practice Violations in Event Logs</i>.

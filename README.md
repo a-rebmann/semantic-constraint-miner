@@ -80,4 +80,4 @@ We provide the data used in the experiments in `project_root/eval_data`.
 
 #### Run the experiments
 The experiments can be run using the `evaluate.py` script.
-There are many configuration options that can to be defined in the `eval_configurations` dictionary in the script. There are already some examples in there.
+There are many configuration options that can be defined in the `eval_configurations` dictionary in the script. There are already some examples in there.

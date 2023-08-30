@@ -1,6 +1,5 @@
 """
 Class to analyze a set of constraints wrt subsumption, i.e., determining which constrains cover which other ones.
-@author Adrian Rebmann <adrianrebmann@gmail.com>
 """
 import logging
 import uuid

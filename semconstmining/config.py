@@ -246,6 +246,8 @@ class Config:
         self.ACTIVATION = "activation"
         self.TEMPLATE = "template"
         self.LTL = "ltl"
+        self.LOG_LABEL_LEFT = "log_label_left"
+        self.LOG_LABEL_RIGHT = "log_label_right"
 
         # DIFFERENT TYPES OF GENERALITY SCORES
         self.NAME_BASED_GENERALITY = "name_based_generality"

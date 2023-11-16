@@ -289,6 +289,49 @@ def compute_relevance_for_log(config, constraints, nlp_helper, process, pd_log=N
     return constraints
 
 
+def get_labels(config, x, log_info, left=True):
+    labels = []
+    if x[config.LEVEL] == config.ACTIVITY:
+        if left:
+            labels.append(log_info.label_to_original_label[x[config.LEFT_OPERAND]] \
+                              if x[config.LEFT_OPERAND] in log_info.label_to_original_label else x[config.LEFT_OPERAND])
+        else:
+            labels.append(log_info.label_to_original_label[x[config.RIGHT_OPERAND]] \
+                              if x[config.RIGHT_OPERAND] in log_info.label_to_original_label else x[
+                config.RIGHT_OPERAND])
+    elif x[config.LEVEL] == config.OBJECT:
+        for obj, original_labels in log_info.object_to_original_labels.items():
+            if obj == x[config.OBJECT]:
+                for original_label in log_info.object_to_original_labels[obj]:
+                    if left and x[config.LEFT_OPERAND] in log_info.action_to_original_labels and original_label in \
+                            log_info.action_to_original_labels[x[config.LEFT_OPERAND]]:
+                        labels.append(original_label)
+                    if (not left) and x[
+                        config.RIGHT_OPERAND] in log_info.action_to_original_labels and original_label in \
+                            log_info.action_to_original_labels[x[config.RIGHT_OPERAND]]:
+                        labels.append(original_label)
+    elif x[config.LEVEL] == config.MULTI_OBJECT:
+        for obj, original_labels in log_info.object_to_original_labels.items():
+            if left and obj == x[config.LEFT_OPERAND]:
+                labels = original_labels
+            if (not left) and obj == x[config.RIGHT_OPERAND]:
+                labels = original_labels
+    elif x[config.LEVEL] == config.RESOURCE:
+        if left:
+            labels.append(log_info.label_to_original_label[x[config.LEFT_OPERAND]] \
+                              if x[config.LEFT_OPERAND] in log_info.label_to_original_label else x[config.LEFT_OPERAND])
+    return labels
+
+
+def add_original_labels(config, consistent_recommended_constraints, log_info):
+    # add original event labels to fitted constraints dataframe
+    consistent_recommended_constraints[config.LOG_LABEL_LEFT] = consistent_recommended_constraints.apply(
+        lambda x: get_labels(config, x, log_info), axis=1)
+    consistent_recommended_constraints[config.LOG_LABEL_RIGHT] = consistent_recommended_constraints.apply(
+        lambda x: get_labels(config, x, log_info, left=False), axis=1)
+    return consistent_recommended_constraints
+
+
 def recommend_constraints_for_log(config, rec_config, constraints, nlp_helper, process, pd_log=None):
     lh = LogHandler(config)
     if pd_log is None:
@@ -306,6 +349,7 @@ def recommend_constraints_for_log(config, rec_config, constraints, nlp_helper, p
     recommended_constraints = recommender.recommend(fitted_constraints)
     selected_constraints = recommender.recommend_by_activation(recommended_constraints)
     return selected_constraints
+
 
 
 def get_log_and_info(conf, nlp_helper, process):
@@ -399,7 +443,8 @@ def run_full_extraction_pipeline(config: Config, process: str, filter_config: Fi
                                                          pd_log=event_log, precompute=True)
         filtered_constraints.to_pickle(config.DATA_INTERIM / (CURRENT_LOG_FILE + "-constraints_with_relevance.pkl"))
     else:
-        filtered_constraints = pd.read_pickle(config.DATA_INTERIM / (CURRENT_LOG_FILE + "-constraints_with_relevance.pkl"))
+        filtered_constraints = pd.read_pickle(
+            config.DATA_INTERIM / (CURRENT_LOG_FILE + "-constraints_with_relevance.pkl"))
     recommended_constraints = recommend_constraints_for_log(config, recommender_config, filtered_constraints,
                                                             nlp_helper,
                                                             process, pd_log=event_log)
@@ -423,30 +468,36 @@ def run_full_extraction_pipeline(config: Config, process: str, filter_config: Fi
         # (consistent_recommended_constraints["constraint_string"].str.contains("Alternate Succession"))&
         (~(consistent_recommended_constraints["template"].str.contains("Not")))
     ]
+    consistent_recommended_constraints = add_original_labels(config, consistent_recommended_constraints, log_info)
     end_time = time.time()
     _logger.info("Stage 2 took " + str(end_time - start_time_dynamic) + " seconds")
     start_time_checking = time.time()
-    violations = check_constraints(config, process, consistent_recommended_constraints, nlp_helper, pd_log=event_log, with_id=True)
+    violations = check_constraints(config, process, consistent_recommended_constraints, nlp_helper, pd_log=event_log,
+                                   with_id=True)
     violations_to_cases = get_violation_to_cases(config, violations, with_id=True)
     violation_df = pd.DataFrame.from_records(
         [{"violation": violation, "num_violations": len(cases), "cases": cases} for violation, cases in
          violations_to_cases.items()])
-    merged_df = pd.merge(consistent_recommended_constraints.reset_index(), violation_df,
-                         left_on=config.RECORD_ID, right_on='violation', how='inner')
-    end_time_checking = time.time()
-    _logger.info("Stage 3 took " + str(end_time_checking - start_time_checking) + " seconds")
-    # filtered_violations = filter_violations(violations)
-    if write_results:
-        merged_df["model_id"] = merged_df["model_id"].apply(lambda x: x.split(" | "))
-        merged_df["model_name"] = merged_df["model_name"].apply(lambda x: x.split(" | "))
-        merged_df.drop(columns=["activation", "inconsistent", "redundant", "index"], inplace=True)
-        merged_df.to_csv(config.DATA_OUTPUT / (CURRENT_LOG_FILE + "-violations.csv"), index=False)
-        consistent_recommended_constraints.to_csv(config.DATA_OUTPUT / (CURRENT_LOG_FILE + "-recommended_constraints.csv"),
-                                                  index=False)
-    _logger.info("Done")
+    if len(violation_df) > 0:
+        merged_df = pd.merge(consistent_recommended_constraints.reset_index(), violation_df,
+                             left_on=config.RECORD_ID, right_on='violation', how='inner')
+        end_time_checking = time.time()
+        _logger.info("Stage 3 took " + str(end_time_checking - start_time_checking) + " seconds")
+        # filtered_violations = filter_violations(violations)
+        if write_results:
+            merged_df["model_id"] = merged_df["model_id"].apply(lambda x: x.split(" | "))
+            merged_df["model_name"] = merged_df["model_name"].apply(lambda x: x.split(" | "))
+            merged_df.drop(columns=["activation", "inconsistent", "redundant", "index", "ltl"], inplace=True)
+            merged_df.to_csv(config.DATA_OUTPUT / (CURRENT_LOG_FILE + "-violations.csv"), index=False)
+            consistent_recommended_constraints.drop(columns=["activation", "inconsistent", "redundant", "index", "ltl"],
+                                                    inplace=True)
+            consistent_recommended_constraints.to_csv(config.DATA_OUTPUT / (CURRENT_LOG_FILE +
+                                                                            "-recommended_constraints.csv"),
+                                                      index=False)
+        _logger.info("Done")
 
 
-CURRENT_LOG_FILE = "BPI_Challenge_2019-3-w-after.xes"
+CURRENT_LOG_FILE = "runningexample.xes"
 MODEL_COLLECTION = "semantic_sap_sam_filtered"
 
 if __name__ == "__main__":
@@ -455,9 +506,8 @@ if __name__ == "__main__":
         _logger.error("Please specify log file (CURRENT_LOG_FILE) and put it into " + str(conf.DATA_LOGS))
         sys.exit(1)
     filt_config = FilterConfig(conf)
-    rec_config = RecommendationConfig(conf, top_k=250)
+    rec_config = RecommendationConfig(conf, semantic_weight=0.9, top_k=250)
     run_full_extraction_pipeline(config=conf, process=CURRENT_LOG_FILE,
                                  filter_config=filt_config,
                                  recommender_config=rec_config, write_results=True)
     sys.exit(0)
-

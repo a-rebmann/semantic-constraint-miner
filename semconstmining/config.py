@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 
 from semconstmining.mining.model.constraint import Observation
@@ -855,3 +856,4 @@ class Config:
             ]
         }
 
+default_config = Config(Path(os.getcwd()).parents[2].resolve(), "NONE")

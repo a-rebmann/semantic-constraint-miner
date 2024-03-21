@@ -55,7 +55,7 @@ class Declare:
         val = dict[ tuple[trace_pos_inside_log, trace_name] : CheckerResult ]
     """
 
-    def __init__(self, config):
+    def __init__(self, config=None):
         if config is None:
             config = default_config
         self.config = config

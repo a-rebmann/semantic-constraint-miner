@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 
 from semconstmining.mining.model.constraint import Observation
@@ -135,7 +136,7 @@ class Config:
 
         self.PETRI_LOGS_DIR = self.DATA_INTERIM / "bpmn_logs"
 
-        self.MODEL_PATH = self.DATA_ROOT / "bert"
+        self.MODEL_PATH = "arebmann/model"
 
         self.ELEMENTS_SER_FILE = "bpmn_elements.pkl"
         self.LANG_SER_FILE = "bpmn_languages.pkl"
@@ -855,3 +856,6 @@ class Config:
             ]
         }
 
+
+
+default_config = Config(Path(os.getcwd()).parents[2].resolve(), "NONE")

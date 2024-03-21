@@ -497,7 +497,7 @@ def run_full_extraction_pipeline(config: Config, process: str, filter_config: Fi
         _logger.info("Done")
 
 
-CURRENT_LOG_FILE = "runningexample.xes"
+CURRENT_LOG_FILE = "BPI_Challenge_2019-3-w-after.xes"
 MODEL_COLLECTION = "semantic_sap_sam_filtered"
 
 if __name__ == "__main__":

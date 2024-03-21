@@ -21,6 +21,50 @@ from semconstmining.parsing.conversion.jsontopetrinetconverter import JsonToPetr
 _logger = logging.getLogger(__name__)
 
 
+def check_soundness(net, im, fm, timeout=10):
+    try:
+        res = func_timeout(timeout, woflan.apply,
+                           args=(net, im, fm, {woflan.Parameters.RETURN_ASAP_WHEN_NOT_SOUND: True,
+                                               woflan.Parameters.PRINT_DIAGNOSTICS: True,
+                                               woflan.Parameters.RETURN_DIAGNOSTICS: False}))
+        return res
+    except Exception as ex:
+        print("Error during soundness checking.", ex)
+        return False
+
+def create_variant_log(log):
+    variant_log = EventLog()
+    seen = set()
+    already_counted_loop = False
+    for trace in log:
+        trace_labels = tuple([x["concept:name"] for x in trace if x["concept:name"] != ""])
+        if trace_labels not in seen:
+            trace_cpy = Trace()
+            for event in trace:
+                if event["concept:name"] != "":
+                    trace_cpy.append(event)
+            variant_log.append(trace_cpy)
+            seen.add(trace_labels)
+            if 0 < len(trace_labels) == len(set(trace_labels)) and not already_counted_loop:
+                already_counted_loop = True
+    return variant_log
+
+def create_log(net, im, fm, model_elements, loops=False):
+        log = pm4py.play_out(net, im, fm, variant=Variants.EXTENSIVE)
+        for trace in log:
+            for event in trace:
+                e_id = event["concept:name"]
+                event["eid"] = e_id
+                event["concept:name"] = model_elements.loc[e_id,"label"]
+                event["category"] = model_elements.loc[e_id, "category"]
+        variant_log = create_variant_log(log)
+        if not loops:
+            played_out_log = create_log_without_loops(variant_log)
+        else:
+            played_out_log = variant_log
+        return played_out_log
+
+
 def create_log_without_loops(log):
     log_no_loops = EventLog()
     for trace in log:
@@ -104,6 +148,7 @@ class Model2LogConverter:
             return res
         else:
             return False
+
 
     def convert_models_to_pn_df(self, df_bpmn):
         success = 0
@@ -201,3 +246,4 @@ class Model2LogConverter:
                 event[self.config.DICTIONARY] = model_elements.loc[e_id, self.config.DICTIONARY]
                 event[self.config.ELEMENT_CATEGORY] = model_elements.loc[e_id, self.config.ELEMENT_CATEGORY]
         return played_out_log
+

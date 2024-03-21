@@ -13,6 +13,9 @@ from mlxtend.preprocessing import TransactionEncoder
 from mlxtend.frequent_patterns import fpgrowth, apriori
 from itertools import product
 from itertools import combinations
+
+from ..config import default_config
+
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 _logger = logging.getLogger(__name__)
@@ -53,6 +56,8 @@ class Declare:
     """
 
     def __init__(self, config):
+        if config is None:
+            config = default_config
         self.config = config
         self.log = None
         self.model = None

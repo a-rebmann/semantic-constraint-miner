@@ -28,7 +28,7 @@ def check_soundness(net, im, fm, timeout=10):
                                                woflan.Parameters.PRINT_DIAGNOSTICS: True,
                                                woflan.Parameters.RETURN_DIAGNOSTICS: False}))
         return res
-    except Exception as ex:
+    except TimeoutError as ex:
         print("Error during soundness checking.", ex)
         return False
 
@@ -50,7 +50,7 @@ def create_variant_log(log):
     return variant_log
 
 def create_log(net, im, fm, model_elements, loops=False):
-        log = pm4py.play_out(net, im, fm, variant=Variants.EXTENSIVE)
+        log = pm4py.play_out(net, im, fm, variant=Variants.BASIC_PLAYOUT)
         for trace in log:
             for event in trace:
                 e_id = event["concept:name"]

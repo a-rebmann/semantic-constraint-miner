@@ -16,10 +16,9 @@ from tqdm import tqdm
 import torch.multiprocessing as mp
 
 from semconstmining.mining.model.parsed_label import ParsedLabel
-from semconstmining.parsing.label_parser.bert_wrapper import BertWrapper
-from semconstmining.parsing.label_parser.bert_for_label_parsing import BertForLabelParsing
 
 from semconstmining.config import Config
+from semconstmining.parsing.label_parser.bert_tagger import BertTagger
 from semconstmining.util.io import read_pickle, write_pickle
 
 _logger = logging.getLogger(__name__)
@@ -75,7 +74,7 @@ class NlpHelper:
         self.model_id_to_unique_name = {}
         self.model_id_to_name = {}
         self.config = config
-        self.model = BertWrapper.load_serialized(config.MODEL_PATH, BertForLabelParsing)
+        self.model = BertTagger(self.config.MODEL_PATH)
         self.parse_map = {}
         import spacy
         self.nlp = spacy.load(self.config.SPACY_MODEL)
@@ -122,21 +121,11 @@ class NlpHelper:
         self.parse_map[label] = result
         return result
 
-    def parse_labels(self, splits: list) -> list:
-        processed = self.model.predict(splits)
-        tagged_list = []
-        for split, tagged in zip(splits, processed[0]):
-            tagged_clean = self.check_tok_for_object_type(split, tagged)
-            tagged_list.append(tagged_clean)
-        return tagged_list
+    def parse_labels(self, labels: list) -> list:
+        return self.model.predict_batch_at_once(labels)
 
     def predict_single_label(self, label):
-        split = split_label(label)
-        return split, self.model.predict([split])[0][0]
-
-    def predict_single_label_full(self, label):
-        split = split_label(label)
-        return split, self.model.predict([split])
+        return self.model.predict_single_label(label)
 
     def find_objects(self, split, tags):
         bos_temp = " ".join([tok if bo == 'BO' else '#+#' for tok, bo in zip(split, tags)])

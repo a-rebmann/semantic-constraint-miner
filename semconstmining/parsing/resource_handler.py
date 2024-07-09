@@ -223,7 +223,7 @@ class ResourceHandler:
                     self.config.CLEANED_LABEL].unique())
             _logger.info(str(len(all_labs)) + " labels cleaned. " + "Start parsing.")
             all_labs_split = [nlp_helper.split_label(lab) for lab in tqdm(all_labs)]
-            tagged = self.nlp_helper.parse_labels(all_labs_split)
+            tagged = self.nlp_helper.parse_labels(all_labs)
             self.bpmn_task_labels = pd.DataFrame(
                 {self.config.CLEANED_LABEL: all_labs, self.config.SPLIT_LABEL: all_labs_split, "tags": tagged,
                  "lang": ["english" for _ in range(len(all_labs))]})

@@ -20,6 +20,40 @@ sys.setrecursionlimit(max_rec)
 _logger.info(sys.getrecursionlimit())
 
 
+def get_elements_flat(model_dict, f, l) -> List[Dict[str, str]]:
+    """
+    Parses the recursive childShapes and produces a flat list of model elements with the most important attributes
+    such as id, category, label, outgoing, and parent elements.
+    """
+    elements_flat = []
+    follows = {}
+    labels = {}
+    for e in l:
+        labels[str(e)] = l[e]
+    for e in f:
+        follows[str(e)] = [str(e) for e in f[e]]
+    stack = deque([model_dict])
+    while len(stack) > 0:
+        element = stack.pop()
+        for c in element.get("childShapes", []):
+            c["parent"] = element["resourceId"]
+            stack.append(c)
+
+        # don't append root as element
+        if element["resourceId"] == model_dict["resourceId"]:
+            continue
+        element_id = str(element["resourceId"])
+        # NOTE: it's possible to add other attributes here, such as the bounds of an element
+        record = {
+            "eid": element_id,
+            "category": element["stencil"].get("id") if "stencil" in element else None,
+            "label": element["properties"].get("name"),
+        }
+        elements_flat.append(record)
+
+    return elements_flat
+
+
 def parse_dict_csv_raw(csv_path: Path, **kwargs):
     df = (
         pd.read_csv(csv_path, dtype={"Type": "category", "Category": "category"}, **kwargs)

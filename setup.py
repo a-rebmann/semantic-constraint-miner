@@ -39,7 +39,6 @@ setup(
         'func-timeout==4.3.5',
         'pm4py==2.5.1',
         'gensim==4.3.1',
-        "pylogics==0.1.1",
         "textblob",
         "typer==0.4.2",
         "typing-extensions==4.5.0",

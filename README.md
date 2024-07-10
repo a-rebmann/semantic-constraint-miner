@@ -7,23 +7,9 @@ This repository contains the implementation, data, evaluation scripts, and resul
 
 
 ## Setup
-You have the following options to set up the project:
-
-### Via pip
-
 Setup a virtual env and then run the following command in the project root folder:
 ```shell
 pip install .
-```
-
-
-### If you have issues with Macs with M1/M2 chip
-
-We provide a [conda](https://docs.conda.io/projects/conda/en/latest/user-guide/index.html) environment.yml file that can be used to create a new environment and install the required dependencies.
-
-You can use the following conda command to create the environment:
-```shell
-conda env create -f environment.yml  
 ```
 
 
@@ -33,7 +19,6 @@ Create a datafolder on the same level, i.e., in the same directory, as the proje
 The folder structure should look like this:
 
     ├── data
-    │   ├── bert              <- The bert model for tagging the event labels.
     │   ├── eval              <- Optional, if you want to use the evaluation.py script to run the full evaluation.
     │   ├── logs              <- Event logs you want to use.
     │   ├── interim           <- Intermediate data that has been preprocessed.
@@ -54,8 +39,6 @@ python -m spacy download en_core_web_sm
 python -m nltk.downloader stopwords
 ```
 
-Lastly, we use a custom Tagger to extract objects, actions, and various other semantic information from labels.
-You need to download the four files from [here](https://gitlab.uni-mannheim.de/processanalytics/semantic-event-log-annotation/-/tree/main/.model/main) and put them into <code>data/bert/</code>
 
 ## Usage
 1. Place the event logs you want to use in the `data/logs` folder.

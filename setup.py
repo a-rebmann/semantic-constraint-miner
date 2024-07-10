@@ -34,7 +34,6 @@ setup(
         'joblib==1.2.0',
         'numpy==1.24.1',
         'matplotlib==3.6.2',
-        'scipy>=1.2.1',
         'seaborn==0.12.1',
         'spacy==3.5.2',
         'stringcase==1.2.0',

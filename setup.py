@@ -8,7 +8,7 @@ setup(
     packages=find_packages(),
     author='Adrian Rebmann',
     author_email='adrianrebmann@gmmail.com',
-    version="0.2.0",
+    version="0.2.1",
     description="long description",
     long_description=long_description,
     long_description_content_type="text/markdown",

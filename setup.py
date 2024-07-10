@@ -25,8 +25,8 @@ setup(
         'sentence-transformers',
         'gensim',
         'requests',
-        'typing-extensions',
         'textblob',
+        'typing-extensions'
         'jupyter',
         'pandas',
         'tqdm',

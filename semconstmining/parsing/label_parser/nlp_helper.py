@@ -198,7 +198,7 @@ class NlpHelper:
     @property
     def sent_model(self):
         if self._sent_model is None:
-            self._sent_model = SentenceTransformer(self.config.DATA_ROOT / self.config.SENTENCE_TRANSFORMER)
+            self._sent_model = SentenceTransformer(str(self.config.DATA_ROOT) + "/" + self.config.SENTENCE_TRANSFORMER)
         return self._sent_model
 
     def get_synonyms(self, verb):

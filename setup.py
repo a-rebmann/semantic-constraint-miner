@@ -35,7 +35,7 @@ setup(
         'joblib==1.2.0',
         'matplotlib==3.6.2',
         'seaborn==0.12.1',
-        'spacy==3.5.2',
+        'spacy>=3.7.5',
         'stringcase==1.2.0',
         'nltk==3.8.1',
         'spacy_langdetect==0.1.2',

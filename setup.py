@@ -26,7 +26,7 @@ setup(
         'gensim',
         'requests',
         'textblob',
-        'typing-extensions'
+        'typing-extensions',
         'jupyter',
         'pandas',
         'tqdm',

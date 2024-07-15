@@ -1,8 +1,6 @@
-import json
 import os
 from pathlib import Path
 
-from semconstmining.mining.model.constraint import Observation
 from semconstmining.declare.enums import Template
 
 example_models = {

@@ -128,16 +128,20 @@ class NlpHelper:
         return self.model.predict_single_label(label)
 
     def find_objects(self, split, tags):
+        tags = tags[1] if type(tags) == tuple else tags
         bos_temp = " ".join([tok if bo == 'BO' else '#+#' for tok, bo in zip(split, tags)])
         return bos_temp.split('#+#')
 
     def find_actor(self, split, tags):
+        tags = tags[1] if type(tags) == tuple else tags
         return [tok for tok, bo in zip(split, tags) if bo == 'ACTOR']
 
     def find_recipient(self, split, tags):
+        tags = tags[1] if type(tags) == tuple else tags
         return [tok for tok, bo in zip(split, tags) if bo == 'REC']
 
     def find_actions(self, split, tags, lemmatize=False):
+        tags = tags[1] if type(tags) == tuple else tags
         return [self.transform_action_w2v(tok) if lemmatize else
                 tok for tok, a in zip(split, tags) if a in ['A', 'ASTATE', 'BOSTATE']]
 

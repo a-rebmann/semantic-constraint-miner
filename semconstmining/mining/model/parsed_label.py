@@ -6,7 +6,7 @@ _logger = logging.getLogger(__name__)
 
 
 def get_dummy(conf, label, lang):
-    return ParsedLabel(conf, label, [label], ['X'], ['none'], ['none'], lang)
+    return ParsedLabel(conf, label, [label], (["none"], ['X']), ['none'], ['none'], lang)
 
 
 class ParsedLabel:
@@ -17,7 +17,7 @@ class ParsedLabel:
         self.lang = lang
         self.label = label
         self.split_label = split
-        self.tags = tags
+        self.tags = tags[1]
         self.bos = [bo for bo in bos if bo not in config.TERMS_FOR_MISSING]
         self.bos_plain = " ".join(bo.strip() for bo in self.bos if bo not in self._stopwords).strip()
         self.actions = [a.strip() for a in actions]

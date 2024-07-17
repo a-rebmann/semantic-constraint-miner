@@ -292,10 +292,10 @@ class ResourceHandler:
                 parsed = ParsedLabel(self.config, row[self.config.CLEANED_LABEL],
                                      row[self.config.SPLIT_LABEL], row[self.config.TAGS],
                                      self.nlp_helper.find_objects(row[self.config.SPLIT_LABEL],
-                                                                              row[self.config.TAGS]),
+                                                                  row[self.config.TAGS]),
                                      self.nlp_helper.find_actions(row[self.config.SPLIT_LABEL],
-                                                                              row[self.config.TAGS],
-                                                                              lemmatize=True),
+                                                                  row[self.config.TAGS],
+                                                                  lemmatize=True),
                                      row[self.config.LANG],
                                      [entry for entry in row[self.config.DICTIONARY]
                                       if entry not in self.config.TERMS_FOR_MISSING]

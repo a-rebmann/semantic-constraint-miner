@@ -29,7 +29,7 @@ The full process model dataset (a subset of that was used in our experiments) ca
 such that the models are in `./data/raw/sap_sam_2022/models`. Note that for the evaluation experiments we created a 
 filtered version of the dataset, which is included in `project_root/eval_data`.
 
-After installing the package you need to download the Spacy language model for English and nltk stopwords
+After installing the package you need to download the Spacy language model for English and nltk wordnet and stopwords
 
 ```shell
 python -m spacy download en_core_web_sm
@@ -37,6 +37,10 @@ python -m spacy download en_core_web_sm
 
 ```shell
 python -m nltk.downloader stopwords
+```
+
+```shell
+python -m nltk.downloader wordnet
 ```
 
 

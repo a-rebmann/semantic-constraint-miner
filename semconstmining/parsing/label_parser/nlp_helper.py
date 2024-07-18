@@ -1,6 +1,7 @@
 import itertools
 import logging
 import multiprocessing
+import os
 import random
 import re
 import time
@@ -202,7 +203,11 @@ class NlpHelper:
     @property
     def sent_model(self):
         if self._sent_model is None:
-            self._sent_model = SentenceTransformer(str(self.config.DATA_ROOT) + "/" + self.config.SENTENCE_TRANSFORMER)
+            if not os.path.exists(self.config.DATA_ROOT / self.config.SENTENCE_TRANSFORMER):
+                SentenceTransformer(model_name_or_path=self.config.SENTENCE_TRANSFORMER,
+                                    cache_folder=str(self.config.DATA_ROOT) + "/" + self.config.SENTENCE_TRANSFORMER)
+            else:
+                self._sent_model = SentenceTransformer(model_name_or_path=self.config.SENTENCE_TRANSFORMER)
         return self._sent_model
 
     def get_synonyms(self, verb):

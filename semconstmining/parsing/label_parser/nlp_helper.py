@@ -204,7 +204,7 @@ class NlpHelper:
     def sent_model(self):
         if self._sent_model is None:
             if not os.path.exists(self.config.DATA_ROOT / self.config.SENTENCE_TRANSFORMER):
-                SentenceTransformer(model_name_or_path=self.config.SENTENCE_TRANSFORMER,
+                self._sent_model = SentenceTransformer(model_name_or_path=self.config.SENTENCE_TRANSFORMER,
                                     cache_folder=str(self.config.DATA_ROOT) + "/" + self.config.SENTENCE_TRANSFORMER)
             else:
                 self._sent_model = SentenceTransformer(model_name_or_path=self.config.SENTENCE_TRANSFORMER)
